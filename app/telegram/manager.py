@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 from app.core.config import Settings
+from app.pipeline.filters import update_has_text, update_is_incoming
+from app.pipeline.message_pipeline import MessagePipeline
+from app.pipeline.middleware import BasePipelineMiddleware
 from app.schemas.dialogs import (
     DialogInfo,
     ListDialogsResponse,
@@ -15,6 +18,7 @@ from app.schemas.dialogs import (
 from app.schemas.telegram import UserInfo
 from app.telegram.client import TelegramClientPool
 from app.telegram.dialogs import TelegramDialogService
+from app.telegram.dispatcher import TelegramEventDispatcher
 from app.telegram.entities import TelegramEntityResolver
 from app.telegram.messages import TelegramMessageService
 from app.telegram.session import TelegramSessionRegistry
@@ -31,9 +35,23 @@ class TelegramEngine:
         self.entity_resolver = TelegramEntityResolver(client_pool=self.client_pool)
         self.dialogs = TelegramDialogService(client_pool=self.client_pool, entity_resolver=self.entity_resolver)
         self.messages = TelegramMessageService(client_pool=self.client_pool, entity_resolver=self.entity_resolver)
+        self.message_pipeline = MessagePipeline(logger=self.logger)
+        self.message_pipeline.register_dependency("telegram_engine", self)
+        self.message_pipeline.register_middleware(BasePipelineMiddleware())
+        self.message_pipeline.register_handler(
+            self._log_incoming_message,
+            predicate=lambda context: update_is_incoming(context) and update_has_text(context),
+            name="telegram.log_incoming_message",
+        )
+        self.dispatcher = TelegramEventDispatcher(
+            client_pool=self.client_pool,
+            pipeline=self.message_pipeline,
+            logger=self.logger,
+        )
 
     async def connect(self) -> None:
         await self.client_pool.connect()
+        await self.dispatcher.attach()
 
     async def disconnect(self) -> None:
         await self.client_pool.disconnect()
@@ -76,3 +94,14 @@ class TelegramEngine:
     async def forward_messages(self, from_peer: str, to_peer: str, message_ids: list[int]):
         self._require_client()
         return await self.messages.forward_messages(from_peer, to_peer, message_ids)
+
+    async def _log_incoming_message(self, context) -> None:
+        message = getattr(context.update, "message", None)
+        self.logger.info(
+            "Incoming Telegram message",
+            extra={
+                "session_id": context.session_id,
+                "message_id": getattr(message, "id", None),
+                "chat_id": getattr(getattr(context.update, "chat", None), "id", None),
+            },
+        )
