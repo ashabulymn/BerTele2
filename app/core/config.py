@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
+    jwt_secret_key: str = "bertele2-dev-secret"
+    jwt_algorithm: str = "HS256"
+    default_admin_username: str = "admin"
+    default_admin_password: str = "admin123"
     telegram_api_id: int | None = None
     telegram_api_hash: str | None = None
     telegram_session_string: str | None = None
