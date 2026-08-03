@@ -16,4 +16,3 @@ class OutboundMessage(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     sent_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-

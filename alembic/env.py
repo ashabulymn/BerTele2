@@ -3,12 +3,13 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
-from alembic import context
 
-from app.core.config import settings
+from alembic import context
+from app.core.config import get_settings
 from app.models.base import Base
 
 config = context.config
+settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.alembic_database_url)
 
 if config.config_file_name is not None:

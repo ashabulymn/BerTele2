@@ -2,15 +2,23 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from app.core.config import settings
+from app.core.config import Settings
 
-engine = create_async_engine(settings.database_url, future=True, echo=settings.debug)
-async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+def create_engine(settings: Settings) -> AsyncEngine:
+    return create_async_engine(settings.database_url, echo=settings.debug)
+
+
+def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    async with async_session_factory() as session:
-        yield session
-
+    raise RuntimeError("Database session dependency must be provided by the application container")

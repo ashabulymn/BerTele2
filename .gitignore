@@ -8,8 +8,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.coverage.*
 dist/
 build/
 *.egg-info/
 .env
-
+.python-version

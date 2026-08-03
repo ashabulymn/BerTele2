@@ -9,4 +9,3 @@ router.include_router(health.router, tags=["health"])
 router.include_router(meta.router, tags=["meta"])
 router.include_router(telegram.router, tags=["telegram"])
 router.include_router(messages.router, tags=["messages"])
-

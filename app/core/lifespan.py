@@ -17,4 +17,3 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await container.stop()
-

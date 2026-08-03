@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import get_telegram_service
@@ -12,7 +14,6 @@ router = APIRouter()
 @router.post("/messages/send", response_model=SendMessageResponse, status_code=status.HTTP_200_OK)
 async def send_message(
     payload: SendMessageRequest,
-    service: TelegramService = Depends(get_telegram_service),
+    service: Annotated[TelegramService, Depends(get_telegram_service)],
 ) -> SendMessageResponse:
     return await service.send_message(payload.peer, payload.message)
-

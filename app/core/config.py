@@ -7,7 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="BERTELE2_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="BERTELE2_",
+        extra="ignore",
+    )
 
     app_name: str = "BerTele2"
     version: str = "0.1.0"
@@ -17,6 +21,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str = "sqlite+aiosqlite:///./bertele2.db"
     request_timeout: float = 30.0
+    docs_url: str = "/docs"
+    redoc_url: str = "/redoc"
+    openapi_url: str = "/openapi.json"
     telegram_api_id: int | None = None
     telegram_api_hash: str | None = None
     telegram_session_string: str | None = None
@@ -40,6 +47,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-
-
-settings = get_settings()

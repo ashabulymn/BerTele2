@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
@@ -13,10 +14,12 @@ from app.schemas.telegram import DialogInfo, SendMessageResponse, UserInfo
 @dataclass
 class TelegramService:
     settings: Settings
+    logger: logging.Logger
 
     def __post_init__(self) -> None:
         if self.settings.telegram_api_id is None or self.settings.telegram_api_hash is None:
             self.client = None
+            self.logger.warning("Telegram client is disabled because API credentials are missing")
             return
         session = StringSession(self.settings.telegram_session_string or "")
         self.client = TelegramClient(
@@ -28,11 +31,13 @@ class TelegramService:
     async def connect(self) -> None:
         if self.client is None:
             return
+        self.logger.info("Connecting Telegram client")
         await self.client.connect()
 
     async def disconnect(self) -> None:
         if self.client is None:
             return
+        self.logger.info("Disconnecting Telegram client")
         await self.client.disconnect()
 
     def _require_client(self) -> TelegramClient:
@@ -76,4 +81,3 @@ class TelegramService:
                 )
             )
         return result
-

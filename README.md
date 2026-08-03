@@ -2,40 +2,36 @@
 
 BerTele2 is an open-source Telegram MTProto gateway built with FastAPI and Telethon.
 
-## Features
+## What is included
 
-- REST API with versioning under `/api/v1`
-- OpenAPI at `/openapi.json`
-- Interactive docs at `/docs`
-- Telethon session-string authentication
-- SQLite by default, PostgreSQL supported
-- Structured JSON logging
-- Clean Architecture folder layout
+- REST API versioned under `/api/v1`
+- Health endpoint
+- Version endpoint
+- FastAPI lifespan management
+- Dependency injection for application services
+- Swagger UI at `/docs`
+- OpenAPI schema at `/openapi.json`
 - Docker and Docker Compose support
 
-## API
+## Technology stack
 
-- `GET /api/v1/health`
-- `GET /api/v1/version`
-- `GET /api/v1/me`
-- `POST /api/v1/messages/send`
-- `GET /api/v1/dialogs`
+- Python 3.12
+- FastAPI
+- Telethon
+- SQLAlchemy 2
+- Alembic
+- Pydantic v2
+- HTTPX
+- Uvicorn
+- Pytest
+- Ruff
+- Black
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env` and set your Telegram credentials when you are ready to connect to MTProto.
 
-- `BERTELE2_TELEGRAM_API_ID`
-- `BERTELE2_TELEGRAM_API_HASH`
-- `BERTELE2_TELEGRAM_SESSION_STRING`
-
-Optional values:
-
-- `BERTELE2_TELEGRAM_PHONE_NUMBER`
-- `BERTELE2_TELEGRAM_BOT_TOKEN`
-- `BERTELE2_DATABASE_URL`
-
-## Run locally
+## Local run
 
 ```bash
 pip install -r requirements.txt
@@ -47,4 +43,3 @@ uvicorn app.main:app --reload
 ```bash
 docker compose up --build
 ```
-

@@ -32,4 +32,3 @@ class SendMessageRequest(APIModel):
 class SendMessageResponse(APIModel):
     message_id: int
     peer: str
-
