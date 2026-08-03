@@ -4,11 +4,19 @@ import logging
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
-from telethon import TelegramClient
-from telethon.sessions import StringSession
 
 from app.core.config import Settings
-from app.schemas.telegram import DialogInfo, SendMessageResponse, UserInfo
+from app.schemas.dialogs import (
+    DialogInfo,
+    ListDialogsResponse,
+    ListMessagesResponse,
+    SendMessageResponse,
+)
+from app.schemas.telegram import UserInfo
+from app.services.chat_resolver import ChatResolver
+from app.services.dialog_service import DialogService
+from app.services.message_service import MessageService
+from app.services.telegram_client_manager import TelegramClientManager
 
 
 @dataclass
@@ -17,40 +25,35 @@ class TelegramService:
     logger: logging.Logger
 
     def __post_init__(self) -> None:
-        if self.settings.telegram_api_id is None or self.settings.telegram_api_hash is None:
-            self.client = None
-            self.logger.warning("Telegram client is disabled because API credentials are missing")
-            return
-        session = StringSession(self.settings.telegram_session_string or "")
-        self.client = TelegramClient(
-            session,
-            self.settings.telegram_api_id,
-            self.settings.telegram_api_hash,
+        self.client_manager = TelegramClientManager(settings=self.settings, logger=self.logger)
+        self.chat_resolver = ChatResolver(client_manager=self.client_manager, logger=self.logger)
+        self.dialog_service = DialogService(
+            client_manager=self.client_manager,
+            chat_resolver=self.chat_resolver,
+            logger=self.logger,
+        )
+        self.message_service = MessageService(
+            client_manager=self.client_manager,
+            chat_resolver=self.chat_resolver,
+            logger=self.logger,
         )
 
     async def connect(self) -> None:
-        if self.client is None:
-            return
-        self.logger.info("Connecting Telegram client")
-        await self.client.connect()
+        await self.client_manager.connect()
 
     async def disconnect(self) -> None:
-        if self.client is None:
-            return
-        self.logger.info("Disconnecting Telegram client")
-        await self.client.disconnect()
+        await self.client_manager.disconnect()
 
-    def _require_client(self) -> TelegramClient:
-        if self.client is None:
+    def _require_client(self) -> None:
+        if not self.client_manager.is_configured():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Telegram client is not configured",
             )
-        return self.client
 
     async def get_me(self) -> UserInfo:
-        client = self._require_client()
-        me = await client.get_me()
+        self._require_client()
+        me = await self.client_manager.call(lambda client: client.get_me(), action="get me")
         return UserInfo(
             id=me.id,
             username=getattr(me, "username", None),
@@ -60,24 +63,22 @@ class TelegramService:
             is_bot=bool(getattr(me, "bot", False)),
         )
 
-    async def send_message(self, peer: str, message: str) -> SendMessageResponse:
-        client = self._require_client()
-        sent = await client.send_message(peer, message)
-        return SendMessageResponse(message_id=sent.id, peer=peer)
+    async def list_dialogs(self, limit: int = 50, offset: int = 0) -> ListDialogsResponse:
+        self._require_client()
+        return await self.dialog_service.list_dialogs(limit=limit, offset=offset)
 
-    async def list_dialogs(self) -> list[DialogInfo]:
-        client = self._require_client()
-        dialogs = await client.get_dialogs()
-        result: list[DialogInfo] = []
-        for dialog in dialogs:
-            entity = dialog.entity
-            result.append(
-                DialogInfo(
-                    id=dialog.id,
-                    title=getattr(dialog, "title", None),
-                    name=getattr(dialog, "name", None),
-                    unread_count=getattr(dialog, "unread_count", None),
-                    entity=entity.to_dict() if hasattr(entity, "to_dict") else {},
-                )
-            )
-        return result
+    async def get_dialog(self, dialog_id: int) -> DialogInfo:
+        self._require_client()
+        return await self.dialog_service.get_dialog(dialog_id)
+
+    async def list_messages(self, dialog_id: int, limit: int = 50, offset: int = 0) -> ListMessagesResponse:
+        self._require_client()
+        return await self.message_service.list_messages(dialog_id=dialog_id, limit=limit, offset=offset)
+
+    async def send_message(self, peer: str, message: str) -> SendMessageResponse:
+        self._require_client()
+        return await self.message_service.send_message(peer, message)
+
+    async def forward_messages(self, from_peer: str, to_peer: str, message_ids: list[int]):
+        self._require_client()
+        return await self.message_service.forward_messages(from_peer, to_peer, message_ids)

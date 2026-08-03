@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic import Field
-
+from app.schemas import dialogs as dialog_schemas
 from app.schemas.common import APIModel
+
+DialogInfo = dialog_schemas.DialogInfo
+DialogPeer = dialog_schemas.DialogPeer
+ForwardMessageRequest = dialog_schemas.ForwardMessageRequest
+ForwardMessageResponse = dialog_schemas.ForwardMessageResponse
+ListDialogsResponse = dialog_schemas.ListDialogsResponse
+ListMessagesResponse = dialog_schemas.ListMessagesResponse
+MessageInfo = dialog_schemas.MessageInfo
+SendMessageRequest = dialog_schemas.SendMessageRequest
+SendMessageResponse = dialog_schemas.SendMessageResponse
 
 
 class UserInfo(APIModel):
@@ -14,21 +21,3 @@ class UserInfo(APIModel):
     last_name: str | None = None
     phone: str | None = None
     is_bot: bool
-
-
-class DialogInfo(APIModel):
-    id: int
-    title: str | None = None
-    name: str | None = None
-    unread_count: int | None = None
-    entity: dict[str, Any] = Field(default_factory=dict)
-
-
-class SendMessageRequest(APIModel):
-    peer: str
-    message: str
-
-
-class SendMessageResponse(APIModel):
-    message_id: int
-    peer: str
