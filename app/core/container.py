@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
 from app.services.telegram_service import TelegramService
+from app.session.manager import SessionManager
+from app.session.repository import SessionRepository
+from app.session.service import SessionService
+from app.session.storage import SessionStorage
 
 
 class AppContainer:
@@ -16,6 +20,12 @@ class AppContainer:
         self.engine: AsyncEngine = create_engine(settings)
         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
         self.telegram_service = TelegramService(settings=settings, logger=self.logger)
+
+    def session_service(self, session: AsyncSession) -> SessionService:
+        storage = SessionStorage(session)
+        repository = SessionRepository(storage)
+        manager = SessionManager(repository=repository, logger=self.logger)
+        return SessionService(manager=manager)
 
     async def start(self) -> None:
         self.logger.info("Starting application container")

@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import get_settings
 from app.models.base import Base
+from app.session.model import SessionRecord  # noqa: F401
 
 config = context.config
 settings = get_settings()
