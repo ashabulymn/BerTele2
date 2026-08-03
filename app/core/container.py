@@ -7,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
 from app.events import EventBroker
+from app.integrations.webhook.delivery import WebhookDeliveryService
+from app.integrations.webhook.dispatcher import WebhookDispatcher
+from app.integrations.webhook.manager import WebhookManager
+from app.integrations.webhook.repository import WebhookRepository
+from app.integrations.webhook.retry import WebhookRetryPolicy
+from app.integrations.webhook.signer import WebhookSigner
 from app.services.telegram_service import TelegramService
 from app.session.manager import SessionManager
 from app.session.repository import SessionRepository
@@ -22,12 +28,31 @@ class AppContainer:
         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
         self.event_broker = EventBroker(logger=self.logger)
         self.telegram_service = TelegramService(settings=settings, logger=self.logger)
+        self.webhook_retry_policy = WebhookRetryPolicy()
+        self.webhook_signer = WebhookSigner()
 
     def session_service(self, session: AsyncSession) -> SessionService:
         storage = SessionStorage(session)
         repository = SessionRepository(storage)
         manager = SessionManager(repository=repository, logger=self.logger)
         return SessionService(manager=manager)
+
+    def webhook_manager(self, session: AsyncSession) -> WebhookManager:
+        repository = WebhookRepository(session)
+        delivery_service = WebhookDeliveryService(
+            logger=self.logger,
+            signer=self.webhook_signer,
+            retry_policy=self.webhook_retry_policy,
+        )
+        dispatcher = WebhookDispatcher(repository=repository, delivery_service=delivery_service, logger=self.logger)
+        manager = WebhookManager(
+            broker=self.event_broker,
+            repository=repository,
+            dispatcher=dispatcher,
+            logger=self.logger,
+        )
+        manager.subscribe()
+        return manager
 
     async def start(self) -> None:
         self.logger.info("Starting application container")
