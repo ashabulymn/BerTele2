@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 from types import TracebackType
@@ -9,6 +9,9 @@ import pytest
 
 from plugins.gowa.client import GoWAClient
 from plugins.gowa.config import GoWAConfig
+from plugins.gowa.mapper import map_outgoing_payload_to_event, map_webhook_to_event
+from plugins.gowa.models import GoWAInboundEvent, GoWAOutboundEvent
+from plugins.gowa.plugin import GoWAPlugin
 
 
 def test_gowa_status_endpoint(client) -> None:
@@ -18,6 +21,16 @@ def test_gowa_status_endpoint(client) -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["provider"] == "gowa"
+
+
+def test_gowa_health_endpoint(client) -> None:
+    response = client.get("/connectors/gowa/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["provider"] == "gowa"
+    assert payload["healthy"] is True
 
 
 def test_gowa_webhook_endpoint(client) -> None:
@@ -55,11 +68,65 @@ def test_gowa_send_endpoint(client) -> None:
     assert payload["message_type"] == "image"
 
 
+@pytest.mark.anyio
+async def test_gowa_webhook_publishes_to_event_bus() -> None:
+    connector = GoWAPlugin(config=GoWAConfig(use_mock_transport=True))
+    received: list[str] = []
+
+    async def handle(event: GoWAInboundEvent) -> None:
+        received.append(event.payload["from_number"])
+
+    connector.broker.subscribe(GoWAInboundEvent, handle, name="capture")
+    event = map_webhook_to_event({"from": "15551234567", "to": "15557654321", "type": "text", "text": "hello"})
+    await connector.broker.publish(event)
+    await connector.broker.dispatcher.dispatch(event)
+
+    assert received == ["15551234567"]
+
+
+@pytest.mark.anyio
+async def test_gowa_event_bus_to_transport() -> None:
+    connector = GoWAPlugin(config=GoWAConfig(use_mock_transport=True))
+    sent: list[dict[str, Any]] = []
+
+    async def fake_send(payload: dict[str, Any]) -> dict[str, Any]:
+        sent.append(payload)
+        return {"status": "accepted", "provider": "gowa"}
+
+    connector.client.send_message = fake_send  # type: ignore[assignment]
+
+    event = GoWAOutboundEvent(
+        recipient="15557654321",
+        message_type="image",
+        media_url="https://example.com/image.jpg",
+        caption="hello",
+    )
+    await connector.broker.dispatcher.dispatch(event)
+
+    assert sent and sent[0]["to"] == "15557654321"
+    assert sent[0]["type"] == "image"
+
+
+def test_gowa_mapper_round_trip() -> None:
+    webhook = {"from": "15551234567", "to": "15557654321", "type": "image", "media_url": "https://example.com/pic.jpg"}
+    event = map_webhook_to_event(webhook)
+    assert event.payload["from_number"] == "15551234567"
+    assert event.payload["message_type"] == "image"
+
+    message = map_outgoing_payload_to_event({"to": "15557654321", "type": "reply", "reply_to": "abc123", "text": "hi"})
+    assert message.payload["recipient"] == "15557654321"
+    assert message.payload["message_type"] == "reply"
+
+
 def test_gowa_client_retries_exponential_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[int] = []
 
     class FakeResponse:
         status_code = 200
+
+        @property
+        def content(self) -> bytes:
+            return b'{"status": "ok"}'
 
         def json(self) -> dict[str, Any]:
             return {"status": "ok"}
