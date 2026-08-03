@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 from app.core.config import Settings
+from app.events import (
+    EventBroker,
+    PipelineDispatchCompleted,
+    PipelineDispatchFailed,
+    PipelineDispatchStarted,
+)
 from app.pipeline.filters import update_has_text, update_is_incoming
 from app.pipeline.message_pipeline import MessagePipeline
 from app.pipeline.middleware import BasePipelineMiddleware
@@ -35,7 +41,11 @@ class TelegramEngine:
         self.entity_resolver = TelegramEntityResolver(client_pool=self.client_pool)
         self.dialogs = TelegramDialogService(client_pool=self.client_pool, entity_resolver=self.entity_resolver)
         self.messages = TelegramMessageService(client_pool=self.client_pool, entity_resolver=self.entity_resolver)
-        self.message_pipeline = MessagePipeline(logger=self.logger)
+        self.event_broker = EventBroker(logger=self.logger)
+        self.event_broker.subscribe(PipelineDispatchStarted, self._log_event, name="pipeline.started")
+        self.event_broker.subscribe(PipelineDispatchCompleted, self._log_event, name="pipeline.completed")
+        self.event_broker.subscribe(PipelineDispatchFailed, self._log_event, name="pipeline.failed")
+        self.message_pipeline = MessagePipeline(logger=self.logger, event_broker=self.event_broker)
         self.message_pipeline.register_dependency("telegram_engine", self)
         self.message_pipeline.register_middleware(BasePipelineMiddleware())
         self.message_pipeline.register_handler(
@@ -51,10 +61,12 @@ class TelegramEngine:
 
     async def connect(self) -> None:
         await self.client_pool.connect()
+        self.event_broker.start()
         await self.dispatcher.attach()
 
     async def disconnect(self) -> None:
         await self.client_pool.disconnect()
+        await self.event_broker.stop()
 
     def _require_client(self) -> None:
         if not self.client_pool.configured():
@@ -105,3 +117,6 @@ class TelegramEngine:
                 "chat_id": getattr(getattr(context.update, "chat", None), "id", None),
             },
         )
+
+    async def _log_event(self, event) -> None:
+        self.logger.info("Event dispatched", extra={"event_name": event.name, "event_type": event.type_name})

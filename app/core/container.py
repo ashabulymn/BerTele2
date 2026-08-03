@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
+from app.events import EventBroker
 from app.services.telegram_service import TelegramService
 from app.session.manager import SessionManager
 from app.session.repository import SessionRepository
@@ -19,6 +20,7 @@ class AppContainer:
         self.logger = logging.getLogger(__name__)
         self.engine: AsyncEngine = create_engine(settings)
         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
+        self.event_broker = EventBroker(logger=self.logger)
         self.telegram_service = TelegramService(settings=settings, logger=self.logger)
 
     def session_service(self, session: AsyncSession) -> SessionService:
