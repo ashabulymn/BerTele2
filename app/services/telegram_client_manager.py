@@ -1,76 +1,34 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from typing import TypeVar
-
-from telethon import TelegramClient
-from telethon.errors import FloodWaitError
-from telethon.sessions import StringSession
+from dataclasses import dataclass
 
 from app.core.config import Settings
-
-T = TypeVar("T")
+from app.telegram.client import TelegramClientPool
 
 
 @dataclass
 class TelegramClientManager:
     settings: Settings
     logger: logging.Logger
-    _client: TelegramClient | None = field(init=False, default=None)
-    _lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
-
-    def __post_init__(self) -> None:
-        if self.settings.telegram_api_id is None or self.settings.telegram_api_hash is None:
-            self.logger.warning("Telegram client is disabled because API credentials are missing")
-            return
-        session = StringSession(self.settings.telegram_session_string or "")
-        self._client = TelegramClient(
-            session,
-            self.settings.telegram_api_id,
-            self.settings.telegram_api_hash,
-        )
+    _pool: TelegramClientPool | None = None
 
     @property
-    def client(self) -> TelegramClient:
-        if self._client is None:
-            raise RuntimeError("Telegram client is not configured")
-        return self._client
+    def pool(self) -> TelegramClientPool:
+        if self._pool is None:
+            from app.telegram.manager import TelegramEngine
+
+            self._pool = TelegramEngine(settings=self.settings, logger=self.logger).client_pool
+        return self._pool
 
     def is_configured(self) -> bool:
-        return self._client is not None
+        return self.pool.configured()
 
     async def connect(self) -> None:
-        if self._client is None:
-            return
-        async with self._lock:
-            if not self._client.is_connected():
-                self.logger.info("Connecting Telegram client")
-                await self._client.connect()
+        await self.pool.connect()
 
     async def disconnect(self) -> None:
-        if self._client is None:
-            return
-        async with self._lock:
-            if self._client.is_connected():
-                self.logger.info("Disconnecting Telegram client")
-                await self._client.disconnect()
+        await self.pool.disconnect()
 
-    async def call(self, operation: Callable[[TelegramClient], Awaitable[T]], *, action: str) -> T:
-        client = self.client
-        while True:
-            try:
-                return await operation(client)
-            except FloodWaitError as exc:
-                wait_seconds = int(getattr(exc, "seconds", 1))
-                self.logger.warning(
-                    "Flood wait encountered during %s, retrying in %s seconds",
-                    action,
-                    wait_seconds,
-                )
-                await asyncio.sleep(wait_seconds)
-            except Exception:
-                self.logger.exception("Telegram operation failed during %s", action)
-                raise
+    async def call(self, operation, *, action: str):
+        return await self.pool.call(operation, action=action)

@@ -13,7 +13,7 @@ authors = [{name = "BerTele2 Contributors"}]
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
-  "telethon>=1.36.0",
+  "telethon>=1.41.0",
   "SQLAlchemy>=2.0.30",
   "alembic>=1.13.0",
   "pydantic>=2.7.0",

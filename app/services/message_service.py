@@ -3,14 +3,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from app.schemas.dialogs import (
-    ForwardMessageResponse,
-    ListMessagesResponse,
-    MessageInfo,
-    SendMessageResponse,
-)
 from app.services.chat_resolver import ChatResolver
 from app.services.telegram_client_manager import TelegramClientManager
+from app.telegram.messages import TelegramMessageService
 
 
 @dataclass
@@ -18,46 +13,21 @@ class MessageService:
     client_manager: TelegramClientManager
     chat_resolver: ChatResolver
     logger: logging.Logger
+    _service: TelegramMessageService | None = None
 
-    def _message_info(self, message, dialog_id: int) -> MessageInfo:
-        return MessageInfo(
-            id=message.id,
-            dialog_id=dialog_id,
-            sender_id=getattr(message, "sender_id", None),
-            text=getattr(message, "message", None),
-            date=getattr(message, "date", None),
-            out=bool(getattr(message, "out", False)),
-            grouped_id=getattr(message, "grouped_id", None),
-            reply_to_msg_id=getattr(getattr(message, "reply_to", None), "reply_to_msg_id", None),
-            fwd_from=getattr(message, "fwd_from", None).to_dict() if hasattr(getattr(message, "fwd_from", None), "to_dict") else None,
-            raw=message.to_dict() if hasattr(message, "to_dict") else {},
-        )
+    def _engine(self) -> TelegramMessageService:
+        if self._service is None:
+            from app.telegram.entities import TelegramEntityResolver
 
-    async def send_message(self, peer: str, message: str) -> SendMessageResponse:
-        entity = await self.chat_resolver.resolve(peer)
-        sent = await self.client_manager.call(
-            lambda client: client.send_message(entity, message),
-            action=f"send message to {peer}",
-        )
-        return SendMessageResponse(message_id=sent.id, peer=peer)
+            resolver = TelegramEntityResolver(client_pool=self.client_manager.pool)
+            self._service = TelegramMessageService(client_pool=self.client_manager.pool, entity_resolver=resolver)
+        return self._service
 
-    async def forward_messages(self, from_peer: str, to_peer: str, message_ids: list[int]) -> ForwardMessageResponse:
-        source = await self.chat_resolver.resolve(from_peer)
-        target = await self.chat_resolver.resolve(to_peer)
-        await self.client_manager.call(
-            lambda client: client.forward_messages(target, message_ids, source),
-            action=f"forward messages from {from_peer} to {to_peer}",
-        )
-        return ForwardMessageResponse(message_ids=message_ids, from_peer=from_peer, to_peer=to_peer)
+    async def send_message(self, peer: str, message: str):
+        return await self._engine().send_message(peer, message)
 
-    async def list_messages(self, dialog_id: int, limit: int = 50, offset: int = 0) -> ListMessagesResponse:
-        entity = await self.chat_resolver.resolve(dialog_id)
-        async def _load(client):
-            items = []
-            async for message in client.iter_messages(entity, limit=limit, offset_id=offset or None):
-                items.append(message)
-            return items
+    async def forward_messages(self, from_peer: str, to_peer: str, message_ids: list[int]):
+        return await self._engine().forward_messages(from_peer, to_peer, message_ids)
 
-        messages = await self.client_manager.call(_load, action=f"list messages for {dialog_id}")
-        items = [self._message_info(message, dialog_id) for message in messages]
-        return ListMessagesResponse(items=items, total=offset + len(items), limit=limit, offset=offset)
+    async def list_messages(self, dialog_id: int, limit: int = 50, offset: int = 0):
+        return await self._engine().list_messages(dialog_id=dialog_id, limit=limit, offset=offset)
