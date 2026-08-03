@@ -30,7 +30,7 @@ postgres = ["psycopg[binary]>=3.2.0"]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "plugins*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -8,6 +8,7 @@ from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
 from app.security.auth import SecurityService
 from app.security.middleware import SecurityMiddleware
+from plugins.gowa.webhook import router as gowa_router
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -23,3 +24,4 @@ app = FastAPI(
 app.add_middleware(SecurityMiddleware)
 app.state.security_service = SecurityService()
 app.include_router(v1_router, prefix=settings.api_prefix)
+app.include_router(gowa_router)
