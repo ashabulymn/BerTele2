@@ -9,6 +9,8 @@ from app.core.logging import configure_logging
 from app.security.auth import SecurityService
 from app.security.middleware import SecurityMiddleware
 from plugins.gowa.webhook import router as gowa_router
+from plugins.n8n.api import router as n8n_api_router
+from plugins.n8n.webhook import router as n8n_webhook_router
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -25,3 +27,5 @@ app.add_middleware(SecurityMiddleware)
 app.state.security_service = SecurityService()
 app.include_router(v1_router, prefix=settings.api_prefix)
 app.include_router(gowa_router)
+app.include_router(n8n_webhook_router)
+app.include_router(n8n_api_router)
