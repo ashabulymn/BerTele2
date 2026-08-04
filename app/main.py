@@ -6,6 +6,7 @@ from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
+from app.dashboard.router import router as dashboard_router
 from app.security.auth import SecurityService
 from app.security.middleware import SecurityMiddleware
 from plugins.gowa.webhook import router as gowa_router
@@ -26,6 +27,7 @@ app = FastAPI(
 app.add_middleware(SecurityMiddleware)
 app.state.security_service = SecurityService()
 app.include_router(v1_router, prefix=settings.api_prefix)
+app.include_router(dashboard_router)
 app.include_router(gowa_router)
 app.include_router(n8n_webhook_router)
 app.include_router(n8n_api_router)

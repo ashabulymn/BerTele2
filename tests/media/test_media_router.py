@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+
+def test_media_types_endpoint(client) -> None:
+    response = client.get("/api/v1/media/types")
+
+    assert response.status_code == 200
+    assert "photo" in response.json()
+    assert "document" in response.json()
+
+
+def test_mock_media_metadata_endpoint(client) -> None:
+    response = client.get("/api/v1/media/example")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["type"] == "document"
+    assert payload["filename"] == "example.bin"
+
+
+def test_mock_media_delete_endpoint(client) -> None:
+    response = client.delete("/api/v1/media/example")
+
+    assert response.status_code == 204

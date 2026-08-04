@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     users,
     webhooks,
 )
+from app.media.router import router as media_router
 
 router = APIRouter()
 router.include_router(auth.router, tags=["auth"])
@@ -26,3 +27,4 @@ router.include_router(telegram.router, tags=["telegram"])
 router.include_router(messages.router, tags=["messages"])
 router.include_router(sessions.router, tags=["sessions"])
 router.include_router(webhooks.router, tags=["webhooks"])
+router.include_router(media_router, tags=["media"])
