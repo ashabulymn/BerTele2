@@ -8,6 +8,10 @@ from app.media.models import MEDIA_MODEL_BY_TYPE, MediaMetadata, MediaOperation,
 from app.media.providers.base import StorageProvider
 from app.media.providers.factory import StorageFactory
 from app.media.utils import calculate_sha256, detect_mime_type, sanitize_filename
+from app.media.pipeline.builder import MediaPipelineBuilder
+from app.media.pipeline.context import MediaPipelineContext
+from app.media.pipeline.interfaces import MediaResource
+from app.media.pipeline.steps import DEFAULT_PIPELINE_STEPS
 
 DEFAULT_MAX_MEDIA_SIZE = 50 * 1024 * 1024
 
@@ -146,6 +150,29 @@ class MediaService:
     def storage_provider_name(self) -> str:
         """Return the configured storage provider name."""
         return self._provider.name
+
+    async def process(
+        self,
+        payload: MediaPrepareRequest,
+        content: bytes,
+        *,
+        connector: str,
+        source: str,
+        configuration: dict[str, Any] | None = None,
+    ) -> MediaResource:
+        """Process and store media through the reusable media pipeline."""
+        pipeline = MediaPipelineBuilder()
+        for step in DEFAULT_PIPELINE_STEPS:
+            pipeline.add_step(step)
+        context = MediaPipelineContext(
+            connector=connector,
+            source=source,
+            storage_provider=self._provider,
+            payload=payload,
+            content=content,
+            configuration={"max_media_size": self.max_media_size, **(configuration or {})},
+        )
+        return await pipeline.build().process(context)
 
     @property
     def _provider(self) -> StorageProvider:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 
 from app.media.models import MediaMetadata, MediaPrepareRequest, MediaType
+from app.media.pipeline.steps import DEFAULT_PIPELINE_STEPS
 from app.media.service import MediaService
 
 router = APIRouter()
@@ -25,6 +26,26 @@ async def get_storage_provider() -> dict[str, str]:
 async def get_storage_info() -> dict[str, object]:
     """Return storage provider configuration visible to the media service."""
     return await service.storage_info()
+
+
+@router.get("/media/pipeline")
+async def get_media_pipeline() -> dict[str, object]:
+    """Return the active media pipeline configuration."""
+    return {
+        "async": True,
+        "entrypoint": "MediaPipeline",
+        "steps": [step.name for step in DEFAULT_PIPELINE_STEPS],
+        "storage_provider": service.storage_provider_name(),
+    }
+
+
+@router.get("/media/pipeline/steps")
+async def get_media_pipeline_steps() -> list[dict[str, object]]:
+    """Return the default media pipeline execution order."""
+    return [
+        {"name": step.name, "order": index, "enabled": True}
+        for index, step in enumerate(DEFAULT_PIPELINE_STEPS, start=1)
+    ]
 
 
 @router.get("/media/{media_id}", response_model=MediaMetadata)

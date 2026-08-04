@@ -7,6 +7,7 @@ import pytest
 
 from app.media.exceptions import MediaNotFound, MediaTooLarge
 from app.media.models import MediaType
+from app.media.providers.memory import MemoryStorageProvider
 from app.media.service import MediaService
 from app.telegram.media.downloader import DownloadFailed, TelegramMediaDownloader
 
@@ -52,7 +53,7 @@ async def test_downloader_hashes_streamed_content() -> None:
     client = FakeTelegramMediaClient(content)
     downloader = TelegramMediaDownloader(
         client=client,
-        media_service=MediaService(max_media_size=100),
+        media_service=MediaService(max_media_size=100, storage_provider=MemoryStorageProvider()),
         chunk_size=4,
     )
 
@@ -69,7 +70,7 @@ async def test_downloader_hashes_streamed_content() -> None:
     assert resource.metadata.sha256 == expected_hash
     assert resource.metadata.type == MediaType.DOCUMENT
     assert resource.metadata.mime_type == "application/pdf"
-    assert resource.storage_key == f"document/{resource.metadata.id}"
+    assert resource.storage_key == expected_hash
     assert client.requested_chunk_size == 4
 
 
@@ -77,7 +78,7 @@ async def test_downloader_hashes_streamed_content() -> None:
 async def test_downloader_rejects_large_file_before_download() -> None:
     downloader = TelegramMediaDownloader(
         client=FakeTelegramMediaClient([b"ignored"]),
-        media_service=MediaService(max_media_size=3),
+        media_service=MediaService(max_media_size=3, storage_provider=MemoryStorageProvider()),
         max_download_size=3,
     )
 
@@ -89,7 +90,7 @@ async def test_downloader_rejects_large_file_before_download() -> None:
 async def test_downloader_rejects_large_file_while_streaming() -> None:
     downloader = TelegramMediaDownloader(
         client=FakeTelegramMediaClient([b"12", b"34"]),
-        media_service=MediaService(max_media_size=3),
+        media_service=MediaService(max_media_size=3, storage_provider=MemoryStorageProvider()),
         max_download_size=3,
     )
 
@@ -101,7 +102,7 @@ async def test_downloader_rejects_large_file_while_streaming() -> None:
 async def test_downloader_raises_media_not_found_for_missing_metadata() -> None:
     downloader = TelegramMediaDownloader(
         client=FakeTelegramMediaClient([b"content"], metadata=None),
-        media_service=MediaService(),
+        media_service=MediaService(storage_provider=MemoryStorageProvider()),
     )
 
     with pytest.raises(MediaNotFound):
@@ -112,7 +113,7 @@ async def test_downloader_raises_media_not_found_for_missing_metadata() -> None:
 async def test_downloader_reports_download_failure() -> None:
     downloader = TelegramMediaDownloader(
         client=FakeTelegramMediaClient([b"content"], fail_stream=True),
-        media_service=MediaService(),
+        media_service=MediaService(storage_provider=MemoryStorageProvider()),
         retry_count=1,
     )
 

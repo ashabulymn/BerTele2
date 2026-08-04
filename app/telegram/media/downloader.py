@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.media.exceptions import MediaNotFound, MediaTooLarge, UnsupportedMedia
-from app.media.models import MediaMetadata, MediaOperation
+from app.media.pipeline.interfaces import MediaResource
 from app.media.service import MediaService
-from app.media.utils import detect_mime_type
 from app.telegram.media.client import TelegramMediaClient
 from app.telegram.media.mapper import InvalidTelegramMedia, TelegramMediaMapper
 
@@ -20,14 +18,6 @@ class DownloadFailed(RuntimeError):
 
 class TelegramMediaTimeout(TimeoutError):
     """Raised when Telegram media download exceeds the configured timeout."""
-
-
-@dataclass(slots=True)
-class MediaResource:
-    metadata: MediaMetadata
-    storage_key: str
-    content: bytes | None = None
-    ready: bool = True
 
 
 @dataclass(slots=True)
@@ -53,16 +43,11 @@ class TelegramMediaDownloader:
             raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
 
         await self._get_file_metadata(mapping.file_reference, session_id=session_id)
-        metadata = await asyncio.wait_for(
+        resource = await asyncio.wait_for(
             self._download_mapped(mapping, session_id=session_id),
             timeout=self.download_timeout,
         )
-        operation = self.media_service.prepare_download(metadata)
-        return MediaResource(
-            metadata=operation.metadata,
-            storage_key=operation.storage_key,
-            ready=operation.ready,
-        )
+        return resource
 
     async def _get_file_metadata(self, file_reference: Any, *, session_id: str) -> Any:
         try:
@@ -73,7 +58,7 @@ class TelegramMediaDownloader:
             raise MediaNotFound("Telegram media file was not found")
         return metadata
 
-    async def _download_mapped(self, mapping, *, session_id: str) -> MediaMetadata:
+    async def _download_mapped(self, mapping, *, session_id: str) -> MediaResource:
         last_error: Exception | None = None
         for attempt in range(1, self.retry_count + 1):
             try:
@@ -85,10 +70,9 @@ class TelegramMediaDownloader:
                 self.logger.warning("Telegram media download attempt %s failed", attempt)
         raise DownloadFailed("Telegram media download failed") from last_error
 
-    async def _stream_to_metadata(self, mapping, *, session_id: str) -> MediaMetadata:
-        digest = hashlib.sha256()
+    async def _stream_to_metadata(self, mapping, *, session_id: str) -> MediaResource:
         total_size = 0
-        sample = bytearray()
+        chunks: list[bytes] = []
 
         async for chunk in self.client.stream_file(
             mapping.file_reference,
@@ -98,18 +82,14 @@ class TelegramMediaDownloader:
             total_size += len(chunk)
             if total_size > self.max_download_size:
                 raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
-            digest.update(chunk)
-            if len(sample) < 4096:
-                sample.extend(chunk[: 4096 - len(sample)])
+            chunks.append(chunk)
 
-        mime_type = mapping.mime_type or mapping.payload.mime_type or detect_mime_type(
-            mapping.payload.filename,
-            bytes(sample),
+        payload = mapping.payload.model_copy(
+            update={"mime_type": mapping.mime_type or mapping.payload.mime_type}
         )
-        return self.media_service.create_streamed_metadata(
-            mapping.payload,
-            size=total_size,
-            sha256=digest.hexdigest(),
-            mime_type=mime_type,
-            sample=bytes(sample),
+        return await self.media_service.process(
+            payload,
+            b"".join(chunks),
+            connector="telegram",
+            source=str(mapping.file_reference),
         )
