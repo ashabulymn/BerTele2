@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     telegram_session_string: str | None = None
     telegram_phone_number: str | None = None
     telegram_bot_token: str | None = None
+    telegram_media_max_download_size: int = Field(default=50 * 1024 * 1024)
+    telegram_media_chunk_size: int = Field(default=1024 * 1024)
+    telegram_media_download_timeout: float = Field(default=30.0)
+    telegram_media_retry_count: int = Field(default=3)
     websocket_max_connections: int = Field(default=100)
 
     @property

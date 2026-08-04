@@ -54,6 +54,36 @@ class MediaService:
             thumbnail_id=payload.thumbnail_id,
         )
 
+    def create_streamed_metadata(
+        self,
+        payload: MediaPrepareRequest,
+        *,
+        size: int,
+        sha256: str,
+        mime_type: str,
+        sample: bytes = b"",
+    ) -> MediaMetadata:
+        """Create metadata for content that was hashed while streaming."""
+        filename = sanitize_filename(payload.filename) if payload.filename else None
+        detected_mime_type = mime_type or payload.mime_type or detect_mime_type(filename, sample)
+        self.validate_media(payload.type, sample[: min(len(sample), self.max_media_size + 1)], detected_mime_type)
+        if size > self.max_media_size:
+            raise MediaTooLarge(f"Media exceeds {self.max_media_size} bytes")
+
+        model = MEDIA_MODEL_BY_TYPE[payload.type]
+        return model(
+            mime_type=detected_mime_type,
+            filename=filename,
+            caption=payload.caption,
+            size=size,
+            width=payload.width,
+            height=payload.height,
+            duration=payload.duration,
+            sha256=sha256,
+            telegram_file_id=payload.telegram_file_id,
+            thumbnail_id=payload.thumbnail_id,
+        )
+
     def prepare_upload(self, payload: MediaPrepareRequest, content: bytes) -> MediaOperation:
         """Prepare metadata and a deterministic storage key for a future upload."""
         metadata = self.create_metadata(payload, content)

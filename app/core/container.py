@@ -18,6 +18,7 @@ from app.session.manager import SessionManager
 from app.session.repository import SessionRepository
 from app.session.service import SessionService
 from app.session.storage import SessionStorage
+from app.telegram.media.service import TelegramMediaService, build_telegram_media_service
 
 
 class AppContainer:
@@ -28,6 +29,11 @@ class AppContainer:
         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
         self.event_broker = EventBroker(logger=self.logger)
         self.telegram_service = TelegramService(settings=settings, logger=self.logger)
+        self.telegram_media_service: TelegramMediaService = build_telegram_media_service(
+            settings=settings,
+            telegram_service=self.telegram_service,
+            logger=self.logger,
+        )
         self.webhook_retry_policy = WebhookRetryPolicy()
         self.webhook_signer = WebhookSigner()
 
