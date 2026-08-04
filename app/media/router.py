@@ -15,6 +15,18 @@ async def list_media_types() -> list[str]:
     return [media_type.value for media_type in MediaType]
 
 
+@router.get("/media/storage/provider")
+async def get_storage_provider() -> dict[str, str]:
+    """Return the active media storage provider."""
+    return {"provider": service.storage_provider_name()}
+
+
+@router.get("/media/storage/info")
+async def get_storage_info() -> dict[str, object]:
+    """Return storage provider configuration visible to the media service."""
+    return await service.storage_info()
+
+
 @router.get("/media/{media_id}", response_model=MediaMetadata)
 async def get_media(media_id: str) -> MediaMetadata:
     """Return mocked media metadata until persistent storage is introduced."""

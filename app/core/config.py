@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     telegram_media_chunk_size: int = Field(default=1024 * 1024)
     telegram_media_download_timeout: float = Field(default=30.0)
     telegram_media_retry_count: int = Field(default=3)
+    media_provider: str = Field(default="local")
+    media_storage_path: str = Field(default="./storage/media")
+    media_max_size: int = Field(default=50 * 1024 * 1024)
+    media_allowed_extensions: str = Field(
+        default=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.mp3,.wav,.ogg,.pdf,.txt,.bin"
+    )
     websocket_max_connections: int = Field(default=100)
 
     @property

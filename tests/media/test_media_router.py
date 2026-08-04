@@ -9,6 +9,20 @@ def test_media_types_endpoint(client) -> None:
     assert "document" in response.json()
 
 
+def test_media_storage_provider_endpoint(client) -> None:
+    response = client.get("/api/v1/media/storage/provider")
+
+    assert response.status_code == 200
+    assert response.json()["provider"] in {"local", "memory"}
+
+
+def test_media_storage_info_endpoint(client) -> None:
+    response = client.get("/api/v1/media/storage/info")
+
+    assert response.status_code == 200
+    assert "provider" in response.json()
+
+
 def test_mock_media_metadata_endpoint(client) -> None:
     response = client.get("/api/v1/media/example")
 
