@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     apikeys,
     auth,
     dialogs,
+    gowa_media,
     health,
     messages,
     meta,
@@ -30,3 +31,4 @@ router.include_router(sessions.router, tags=["sessions"])
 router.include_router(webhooks.router, tags=["webhooks"])
 router.include_router(media_router, tags=["media"])
 router.include_router(telegram_media_router, tags=["telegram-media"])
+router.include_router(gowa_media.router, tags=["gowa-media"])

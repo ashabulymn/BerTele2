@@ -20,6 +20,9 @@ class GoWAConfig(BaseSettings):
     backoff_factor: float = Field(default=1.5, gt=0)
     max_backoff: float = Field(default=30.0, gt=0)
     use_mock_transport: bool = True
+    max_upload_size: int = Field(default=50 * 1024 * 1024, gt=0)
+    upload_timeout: float = Field(default=30.0, ge=1.0)
+    retry_count: int = Field(default=3, ge=0)
 
     @property
     def api_base_url(self) -> str:
