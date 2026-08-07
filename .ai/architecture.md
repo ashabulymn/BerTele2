@@ -90,6 +90,8 @@ See [context/telegram.md](context/telegram.md).
 
 Connects BerTele2 to GoWA (WhatsApp gateway) for sending media. Includes a config, sender, mapper, and service layer.
 
+Authentication is handled at the GoWA Connection level (host, username, password). See [context/gowa.md](context/gowa.md) for the full authentication, device, and node models.
+
 ```mermaid
 flowchart LR
     API[GoWA Media API] --> Service[GoWAMediaService]
@@ -240,6 +242,10 @@ See [roadmap.md](roadmap.md).
 
 ## Related Documents
 
+- [README.md](README.md) — AI SDK overview and index.
+- [AI_MANIFEST.md](AI_MANIFEST.md) — SDK version and compatibility.
+- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
+- [AI_CHANGELOG.md](AI_CHANGELOG.md) — AI SDK changelog.
 - [project.md](project.md) — Vision and goals.
 - [module-map.md](module-map.md) — Module-level details.
 - [context/](context/) — Per-subsystem deep dives.

@@ -37,6 +37,18 @@ These are **mandatory** rules for all development on BerTele2. Every Epic, bugfi
 - **Keep functions small.** Prefer many small functions over one large one.
 - **Name things clearly.** Use descriptive names that convey intent.
 
+## GoWA Authentication & Node Model
+
+The following rules are **mandatory** for all GoWA-related development:
+
+- **GoWA authentication belongs to the Connector.** Authentication credentials (host, username, password) are managed at the GoWA Connection level by the Connector. They must never be propagated into workflow nodes or media payloads.
+
+- **Workflow nodes store only `device_id` and `chat_id`.** Workflow nodes may contain ONLY these two fields. No other data should be embedded in node definitions.
+
+- **Authentication credentials must never appear inside workflow definitions.** Host, username, password, and authentication tokens must never be stored in workflow nodes, workflow definitions, or any persisted workflow data.
+
+See [context/gowa.md](context/gowa.md) for the full GoWA architecture documentation.
+
 ## Enforcement
 
 - Code reviews check compliance with these rules. See [review-checklist.md](review-checklist.md).
@@ -51,3 +63,4 @@ These are **mandatory** rules for all development on BerTele2. Every Epic, bugfi
 - [workflow.md](workflow.md) — Development workflow.
 - [review-checklist.md](review-checklist.md) — Review checklist.
 - [roadmap.md](roadmap.md) — Technical debt backlog.
+- [context/gowa.md](context/gowa.md) — GoWA architecture.

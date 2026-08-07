@@ -2,6 +2,18 @@
 
 Use this checklist when reviewing any code change on BerTele2.
 
+## Quality Gates
+
+Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
+
+- [ ] **Unit Tests** — All new behavior has unit tests; full suite passes (`pytest`).
+- [ ] **Scope Verification** — Run `git diff --name-only HEAD`; only `.ai/` files and `README.md` may be modified.
+- [ ] **Git Verification** — Commit message follows Conventional Commits; branch is up to date.
+- [ ] **Patch Verification** — Generate and verify the patch file.
+- [ ] **Final Self Review** — Review against this checklist.
+
+See [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the full quality gate definitions.
+
 ## Architecture
 
 - [ ] Change matches the Epic scope (no unrelated refactoring).
@@ -32,6 +44,7 @@ Use this checklist when reviewing any code change on BerTele2.
 - [ ] AI SDK and relevant docs are updated.
 - [ ] ADR added for significant decisions.
 - [ ] CHANGELOG updated if behavior changed.
+- [ ] AI CHANGELOG updated if AI SDK changed.
 
 ## Performance
 
@@ -61,4 +74,5 @@ Use this checklist when reviewing any code change on BerTele2.
 - [development-rules.md](development-rules.md) — Mandatory rules.
 - [coding-standards.md](coding-standards.md) — Style and conventions.
 - [testing.md](testing.md) — Testing strategy.
+- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt and quality gates.
 - [prompts/review-template.md](prompts/review-template.md) — Review prompt template.

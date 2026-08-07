@@ -1,6 +1,6 @@
 # BerTele2 AI Development Kit (AI SDK)
 
-The **AI Development Kit** is the authoritative documentation for the BerTele2 project. It is designed so that **any AI coding agent** (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue, etc.) can understand the project without prior knowledge.
+The **AI Development Kit** is the authoritative documentation for the BerTele2 project. It is designed so that **any AI coding agent** (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Cursor, Windsurf, Continue, OpenHands, etc.) can understand the project without prior knowledge.
 
 This directory contains project intelligence and development guidance only. It does **not** add application features.
 
@@ -22,17 +22,19 @@ The SDK is agent-agnostic. It works with any agent that can:
 - Run tests and linters.
 - Generate patches.
 
-Examples: ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue.
+See [AI_MANIFEST.md](AI_MANIFEST.md) for the full compatibility matrix.
 
 ## How to Start a New Epic
 
-1. Read [project.md](project.md) and [architecture.md](architecture.md) to understand the vision and system.
-2. Read [roadmap.md](roadmap.md) to see what is planned and what is complete.
-3. Read [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md) before writing code.
-4. Use the [epic-template.md](epic-template.md) to structure the Epic.
-5. Follow [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md) for implementation and delivery.
-6. Consult [module-map.md](module-map.md) and the [context/](context/) files for subsystem details.
-7. Review your work against [review-checklist.md](review-checklist.md) before finishing.
+1. Read [AI_MANIFEST.md](AI_MANIFEST.md) for the SDK version and required documents.
+2. Read [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the consolidated system prompt.
+3. Read [project.md](project.md) and [architecture.md](architecture.md) to understand the vision and system.
+4. Read [roadmap.md](roadmap.md) to see what is planned and what is complete.
+5. Read [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md) before writing code.
+6. Use the [epic-template.md](epic-template.md) to structure the Epic.
+7. Follow [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md) for implementation and delivery.
+8. Consult [module-map.md](module-map.md) and the [context/](context/) files for subsystem details.
+9. Review your work against [review-checklist.md](review-checklist.md) before finishing.
 
 ## How to Review Code
 
@@ -67,10 +69,27 @@ git diff HEAD~1 HEAD > patches/epic-<id>.patch
 
 ---
 
+## Quality Gates
+
+Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
+
+- **Unit Tests** — All new behavior has unit tests; full suite passes (`pytest`).
+- **Scope Verification** — Run `git diff --name-only HEAD`; only `.ai/` files and `README.md` may be modified.
+- **Git Verification** — Commit message follows Conventional Commits; branch is up to date.
+- **Patch Verification** — Generate and verify the patch file.
+- **Final Self Review** — Review against [review-checklist.md](review-checklist.md).
+
+See [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the full quality gate definitions.
+
+---
+
 ## Documentation Index
 
 | Document | Purpose |
 | --- | --- |
+| [AI_MANIFEST.md](AI_MANIFEST.md) | SDK version, compatibility, required documents. |
+| [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) | System prompt for AI agents (rules, gates, workflow). |
+| [AI_CHANGELOG.md](AI_CHANGELOG.md) | AI SDK changelog. |
 | [project.md](project.md) | Vision, mission, goals, users, platforms, philosophy |
 | [architecture.md](architecture.md) | Complete system architecture with diagrams |
 | [roadmap.md](roadmap.md) | Milestones, epics, releases, technical debt |

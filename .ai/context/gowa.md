@@ -9,12 +9,55 @@ The GoWA connector bridges BerTele2 to GoWA (a WhatsApp gateway) for sending med
 ## Architecture
 
 ```mermaid
+flowchart TD
+    Connection[GoWA Connection] --> Connector[Connector]
+    Connector --> Device[Device]
+    Device --> Node[Workflow Node]
+    Node --> Sender[Media Sender]
+```
+
+### Authentication Model
+
+Authentication is handled at the **GoWA Connection** level.
+
+Each connection consists of:
+
+- **host** — GoWA gateway host/URL.
+- **username** — GoWA API username.
+- **password** — GoWA API password.
+
+These credentials **MUST NOT** be stored inside workflow nodes. They are managed exclusively by the Connector and injected at runtime.
+
+### Device Model
+
+Each WhatsApp device is identified by:
+
+- **device_id**
+
+One GoWA connection may manage one or more devices if supported by the connector.
+
+### Node Model
+
+Workflow nodes may contain **ONLY**:
+
+- **device_id**
+- **chat_id**
+
+Nodes **MUST NEVER** contain:
+
+- host
+- username
+- password
+- authentication tokens
+
+## Architecture Diagram
+
+```mermaid
 flowchart LR
-    API[GoWA Media API] --> Service[GoWAMediaService]
-    Service --> Sender[GoWAMediaSender]
-    Sender --> GoWA[GoWA Gateway]
-    Service --> Config[GoWAConfig]
-    Service --> Resource[MediaResource]
+    Connection[GoWA Connection] --> Connector[Connector]
+    Connector --> Device[Device]
+    Device --> Node[Workflow Node]
+    Node --> Sender[Media Sender]
 ```
 
 ## Main Components
@@ -57,3 +100,7 @@ flowchart LR
 - [media.md](media.md) — Media resources.
 - [plugins.md](plugins.md) — Plugin SDK.
 - [decisions/ADR-0002-plugin-architecture.md](../decisions/ADR-0002-plugin-architecture.md) — Plugin decision.
+- [../development-rules.md](../development-rules.md) — Mandatory development rules.
+- [../AI_MANIFEST.md](../AI_MANIFEST.md) — AI SDK manifest.
+- [../SYSTEM_PROMPT.md](../SYSTEM_PROMPT.md) — System prompt for AI agents.
+- [../AI_CHANGELOG.md](../AI_CHANGELOG.md) — AI SDK changelog.

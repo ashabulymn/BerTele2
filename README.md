@@ -27,6 +27,25 @@ BerTele2 is an open-source Telegram MTProto gateway built with FastAPI and Telet
 - Ruff
 - Black
 
+## AI SDK Compatibility
+
+BerTele2 includes an AI Development Kit (`.ai/`) that documents the project for AI coding agents. The following agents are supported:
+
+| Agent | Status |
+| --- | --- |
+| ChatGPT | ✅ Supported |
+| Codex | ✅ Supported |
+| Claude Code | ✅ Supported |
+| Gemini CLI | ✅ Supported |
+| Cline | ✅ Supported |
+| RooCode | ✅ Supported |
+| Cursor | ✅ Supported |
+| Windsurf | ✅ Supported |
+| Continue | ✅ Supported |
+| OpenHands | ✅ Supported |
+
+See [`.ai/README.md`](.ai/README.md) for the full AI SDK documentation.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and set your Telegram credentials when you are ready to connect to MTProto.
@@ -42,4 +61,3 @@ uvicorn app.main:app --reload
 
 ```bash
 docker compose up --build
-```
