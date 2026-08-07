@@ -1,0 +1,632 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 0000000..f21f51f
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,5 @@
++# Changelog
++
++## Unreleased
++
++- Added the Media Engine foundation with typed media models, service validation, utility helpers, an abstract storage interface, mocked API routes, documentation, and unit tests.
+diff --git a/app/api/v1/router.py b/app/api/v1/router.py
+index 04be985..ce51b11 100644
+--- a/app/api/v1/router.py
++++ b/app/api/v1/router.py
+@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
+     users,
+     webhooks,
+ )
++from app.media.router import router as media_router
+ 
+ router = APIRouter()
+ router.include_router(auth.router, tags=["auth"])
+@@ -26,3 +27,4 @@ router.include_router(telegram.router, tags=["telegram"])
+ router.include_router(messages.router, tags=["messages"])
+ router.include_router(sessions.router, tags=["sessions"])
+ router.include_router(webhooks.router, tags=["webhooks"])
++router.include_router(media_router, tags=["media"])
+diff --git a/app/main.py b/app/main.py
+index f792941..8ae6cff 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -6,6 +6,7 @@ from app.api.v1.router import router as v1_router
+ from app.core.config import get_settings
+ from app.core.lifespan import lifespan
+ from app.core.logging import configure_logging
++from app.dashboard.router import router as dashboard_router
+ from app.security.auth import SecurityService
+ from app.security.middleware import SecurityMiddleware
+ from plugins.gowa.webhook import router as gowa_router
+@@ -26,6 +27,7 @@ app = FastAPI(
+ app.add_middleware(SecurityMiddleware)
+ app.state.security_service = SecurityService()
+ app.include_router(v1_router, prefix=settings.api_prefix)
++app.include_router(dashboard_router)
+ app.include_router(gowa_router)
+ app.include_router(n8n_webhook_router)
+ app.include_router(n8n_api_router)
+diff --git a/app/media/__init__.py b/app/media/__init__.py
+new file mode 100644
+index 0000000..b8a6324
+--- /dev/null
++++ b/app/media/__init__.py
+@@ -0,0 +1,33 @@
++from __future__ import annotations
++
++from app.media.models import (
++    Animation,
++    Audio,
++    Document,
++    MediaMetadata,
++    MediaOperation,
++    MediaPrepareRequest,
++    MediaType,
++    Photo,
++    Sticker,
++    Video,
++    Voice,
++)
++from app.media.service import MediaService
++from app.media.storage import MediaStorageProvider
++
++__all__ = [
++    "Animation",
++    "Audio",
++    "Document",
++    "MediaMetadata",
++    "MediaOperation",
++    "MediaPrepareRequest",
++    "MediaService",
++    "MediaStorageProvider",
++    "MediaType",
++    "Photo",
++    "Sticker",
++    "Video",
++    "Voice",
++]
+diff --git a/app/media/exceptions.py b/app/media/exceptions.py
+new file mode 100644
+index 0000000..803479f
+--- /dev/null
++++ b/app/media/exceptions.py
+@@ -0,0 +1,21 @@
++from __future__ import annotations
++
++
++class MediaError(Exception):
++    """Base exception for media engine failures."""
++
++
++class MediaNotFound(MediaError):
++    """Raised when media metadata or content cannot be found."""
++
++
++class UnsupportedMedia(MediaError):
++    """Raised when a media type, extension, or mime type is unsupported."""
++
++
++class MediaTooLarge(MediaError):
++    """Raised when media content exceeds the configured size limit."""
++
++
++class StorageError(MediaError):
++    """Raised when a storage provider fails."""
+diff --git a/app/media/models.py b/app/media/models.py
+new file mode 100644
+index 0000000..8bc87d7
+--- /dev/null
++++ b/app/media/models.py
+@@ -0,0 +1,93 @@
++from __future__ import annotations
++
++from datetime import UTC, datetime
++from enum import StrEnum
++from uuid import uuid4
++
++from pydantic import Field
++
++from app.schemas.common import APIModel
++
++
++class MediaType(StrEnum):
++    PHOTO = "photo"
++    VIDEO = "video"
++    AUDIO = "audio"
++    VOICE = "voice"
++    STICKER = "sticker"
++    ANIMATION = "animation"
++    DOCUMENT = "document"
++
++
++class MediaMetadata(APIModel):
++    id: str = Field(default_factory=lambda: str(uuid4()))
++    type: MediaType
++    mime_type: str
++    filename: str | None = None
++    caption: str | None = None
++    size: int
++    width: int | None = None
++    height: int | None = None
++    duration: float | None = None
++    sha256: str
++    telegram_file_id: str | None = None
++    thumbnail_id: str | None = None
++    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
++
++
++class Photo(MediaMetadata):
++    type: MediaType = MediaType.PHOTO
++
++
++class Video(MediaMetadata):
++    type: MediaType = MediaType.VIDEO
++
++
++class Audio(MediaMetadata):
++    type: MediaType = MediaType.AUDIO
++
++
++class Voice(MediaMetadata):
++    type: MediaType = MediaType.VOICE
++
++
++class Sticker(MediaMetadata):
++    type: MediaType = MediaType.STICKER
++
++
++class Animation(MediaMetadata):
++    type: MediaType = MediaType.ANIMATION
++
++
++class Document(MediaMetadata):
++    type: MediaType = MediaType.DOCUMENT
++
++
++MEDIA_MODEL_BY_TYPE: dict[MediaType, type[MediaMetadata]] = {
++    MediaType.PHOTO: Photo,
++    MediaType.VIDEO: Video,
++    MediaType.AUDIO: Audio,
++    MediaType.VOICE: Voice,
++    MediaType.STICKER: Sticker,
++    MediaType.ANIMATION: Animation,
++    MediaType.DOCUMENT: Document,
++}
++
++
++class MediaPrepareRequest(APIModel):
++    type: MediaType
++    filename: str | None = None
++    caption: str | None = None
++    mime_type: str | None = None
++    width: int | None = None
++    height: int | None = None
++    duration: float | None = None
++    telegram_file_id: str | None = None
++    thumbnail_id: str | None = None
++
++
++class MediaOperation(APIModel):
++    media_id: str
++    metadata: MediaMetadata
++    storage_key: str
++    ready: bool = True
+diff --git a/app/media/router.py b/app/media/router.py
+new file mode 100644
+index 0000000..7872fda
+--- /dev/null
++++ b/app/media/router.py
+@@ -0,0 +1,39 @@
++from __future__ import annotations
++
++from fastapi import APIRouter, HTTPException, status
++
++from app.media.models import MediaMetadata, MediaPrepareRequest, MediaType
++from app.media.service import MediaService
++
++router = APIRouter()
++service = MediaService()
++
++
++@router.get("/media/types", response_model=list[str])
++async def list_media_types() -> list[str]:
++    """Return supported media type names."""
++    return [media_type.value for media_type in MediaType]
++
++
++@router.get("/media/{media_id}", response_model=MediaMetadata)
++async def get_media(media_id: str) -> MediaMetadata:
++    """Return mocked media metadata until persistent storage is introduced."""
++    if not media_id.strip():
++        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Media not found")
++
++    return service.create_metadata(
++        payload=MediaPrepareRequest(
++            type=MediaType.DOCUMENT,
++            filename=f"{media_id}.bin",
++            mime_type="application/octet-stream",
++            caption="Mock media metadata",
++        ),
++        content=b"",
++    )
++
++
++@router.delete("/media/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
++async def delete_media(media_id: str) -> None:
++    """Accept a mocked delete request until persistent storage is introduced."""
++    if not media_id.strip():
++        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Media not found")
+diff --git a/app/media/service.py b/app/media/service.py
+new file mode 100644
+index 0000000..859198b
+--- /dev/null
++++ b/app/media/service.py
+@@ -0,0 +1,72 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++from app.media.exceptions import MediaTooLarge, UnsupportedMedia
++from app.media.models import MEDIA_MODEL_BY_TYPE, MediaMetadata, MediaOperation, MediaPrepareRequest, MediaType
++from app.media.utils import calculate_sha256, detect_mime_type, sanitize_filename
++
++DEFAULT_MAX_MEDIA_SIZE = 50 * 1024 * 1024
++
++SUPPORTED_MIME_PREFIXES: dict[MediaType, tuple[str, ...]] = {
++    MediaType.PHOTO: ("image/",),
++    MediaType.VIDEO: ("video/",),
++    MediaType.AUDIO: ("audio/",),
++    MediaType.VOICE: ("audio/",),
++    MediaType.STICKER: ("image/", "application/x-tgsticker"),
++    MediaType.ANIMATION: ("image/gif", "video/"),
++    MediaType.DOCUMENT: ("application/", "text/", "image/", "audio/", "video/"),
++}
++
++
++@dataclass(slots=True)
++class MediaService:
++    """Prepare and validate media metadata without transferring content."""
++
++    max_media_size: int = DEFAULT_MAX_MEDIA_SIZE
++
++    def validate_media(self, media_type: MediaType, content: bytes, mime_type: str) -> None:
++        """Validate media size and mime compatibility."""
++        if len(content) > self.max_media_size:
++            raise MediaTooLarge(f"Media exceeds {self.max_media_size} bytes")
++
++        supported_prefixes = SUPPORTED_MIME_PREFIXES[media_type]
++        if not any(mime_type == prefix.rstrip("/") or mime_type.startswith(prefix) for prefix in supported_prefixes):
++            raise UnsupportedMedia(f"Unsupported mime type for {media_type}: {mime_type}")
++
++    def create_metadata(self, payload: MediaPrepareRequest, content: bytes) -> MediaMetadata:
++        """Create typed media metadata from a preparation request and content bytes."""
++        filename = sanitize_filename(payload.filename) if payload.filename else None
++        mime_type = payload.mime_type or detect_mime_type(filename, content)
++        self.validate_media(payload.type, content, mime_type)
++
++        model = MEDIA_MODEL_BY_TYPE[payload.type]
++        return model(
++            mime_type=mime_type,
++            filename=filename,
++            caption=payload.caption,
++            size=len(content),
++            width=payload.width,
++            height=payload.height,
++            duration=payload.duration,
++            sha256=calculate_sha256(content),
++            telegram_file_id=payload.telegram_file_id,
++            thumbnail_id=payload.thumbnail_id,
++        )
++
++    def prepare_upload(self, payload: MediaPrepareRequest, content: bytes) -> MediaOperation:
++        """Prepare metadata and a deterministic storage key for a future upload."""
++        metadata = self.create_metadata(payload, content)
++        return MediaOperation(
++            media_id=metadata.id,
++            metadata=metadata,
++            storage_key=f"{metadata.type}/{metadata.id}",
++        )
++
++    def prepare_download(self, metadata: MediaMetadata) -> MediaOperation:
++        """Prepare a download operation descriptor for already known metadata."""
++        return MediaOperation(
++            media_id=metadata.id,
++            metadata=metadata,
++            storage_key=f"{metadata.type}/{metadata.id}",
++        )
+diff --git a/app/media/storage.py b/app/media/storage.py
+new file mode 100644
+index 0000000..c80d953
+--- /dev/null
++++ b/app/media/storage.py
+@@ -0,0 +1,26 @@
++from __future__ import annotations
++
++from abc import ABC, abstractmethod
++from collections.abc import AsyncIterator
++
++from app.media.models import MediaMetadata
++
++
++class MediaStorageProvider(ABC):
++    """Abstract interface for future media storage providers."""
++
++    @abstractmethod
++    async def save(self, metadata: MediaMetadata, content: bytes) -> str:
++        """Persist content and return a storage key."""
++
++    @abstractmethod
++    async def load(self, media_id: str) -> AsyncIterator[bytes]:
++        """Stream persisted content chunks for a media id."""
++
++    @abstractmethod
++    async def delete(self, media_id: str) -> None:
++        """Delete persisted content for a media id."""
++
++    @abstractmethod
++    async def exists(self, media_id: str) -> bool:
++        """Return whether persisted content exists for a media id."""
+diff --git a/app/media/utils.py b/app/media/utils.py
+new file mode 100644
+index 0000000..7e4fc27
+--- /dev/null
++++ b/app/media/utils.py
+@@ -0,0 +1,88 @@
++from __future__ import annotations
++
++import hashlib
++import mimetypes
++import re
++from pathlib import Path
++
++_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
++_RESERVED_WINDOWS_NAMES = {
++    "CON",
++    "PRN",
++    "AUX",
++    "NUL",
++    "COM1",
++    "COM2",
++    "COM3",
++    "COM4",
++    "COM5",
++    "COM6",
++    "COM7",
++    "COM8",
++    "COM9",
++    "LPT1",
++    "LPT2",
++    "LPT3",
++    "LPT4",
++    "LPT5",
++    "LPT6",
++    "LPT7",
++    "LPT8",
++    "LPT9",
++}
++
++
++def calculate_sha256(content: bytes) -> str:
++    """Return the SHA-256 hex digest for content bytes."""
++    return hashlib.sha256(content).hexdigest()
++
++
++def sanitize_filename(filename: str | None, *, fallback: str = "media") -> str:
++    """Return a filesystem-neutral filename safe for storage providers."""
++    raw_name = Path(filename or fallback).name.strip().replace(" ", "_")
++    sanitized = _UNSAFE_FILENAME_CHARS.sub("_", raw_name).strip("._")
++    if not sanitized:
++        sanitized = fallback
++
++    stem = Path(sanitized).stem.upper()
++    if stem in _RESERVED_WINDOWS_NAMES:
++        sanitized = f"{sanitized}_file"
++
++    return sanitized[:255]
++
++
++def detect_extension(filename: str | None, mime_type: str | None = None) -> str | None:
++    """Detect a lowercase file extension from a filename or mime type."""
++    if filename:
++        suffix = Path(filename).suffix.lower().lstrip(".")
++        if suffix:
++            return suffix
++    if mime_type:
++        extension = mimetypes.guess_extension(mime_type, strict=False)
++        if extension:
++            return extension.lower().lstrip(".")
++    return None
++
++
++def detect_mime_type(filename: str | None = None, content: bytes | None = None) -> str:
++    """Detect a mime type using standard library filename and content hints."""
++    if filename:
++        guessed_type, _ = mimetypes.guess_type(filename, strict=False)
++        if guessed_type:
++            return guessed_type
++
++    if content:
++        if content.startswith(b"\xff\xd8\xff"):
++            return "image/jpeg"
++        if content.startswith(b"\x89PNG\r\n\x1a\n"):
++            return "image/png"
++        if content.startswith(b"GIF87a") or content.startswith(b"GIF89a"):
++            return "image/gif"
++        if content.startswith(b"%PDF-"):
++            return "application/pdf"
++        if content.startswith(b"ID3"):
++            return "audio/mpeg"
++        if len(content) >= 12 and content[4:8] == b"ftyp":
++            return "video/mp4"
++
++    return "application/octet-stream"
+diff --git a/docs/media-engine.md b/docs/media-engine.md
+new file mode 100644
+index 0000000..18e0faa
+--- /dev/null
++++ b/docs/media-engine.md
+@@ -0,0 +1,31 @@
++# Media Engine Foundation
++
++The Media Engine provides reusable primitives for future media handling in BerTele2. It defines typed metadata models, validation, filename and mime helpers, hashing, and a storage provider interface without implementing any concrete transfer or persistence backend.
++
++## Architecture
++
++- `app/media/models.py` defines common metadata and typed media models for photos, videos, audio, voice, stickers, animations, and documents.
++- `app/media/service.py` validates media, detects mime types, calculates SHA-256 hashes, sanitizes filenames, and prepares upload/download operation descriptors.
++- `app/media/storage.py` defines the abstract storage provider contract for future backends.
++- `app/media/router.py` exposes mocked API endpoints for supported types, metadata lookup, and deletion.
++- `app/media/utils.py` contains reusable helpers for hashing, filename sanitization, extension detection, and mime detection.
++
++## Responsibilities
++
++The foundation is intentionally limited to deterministic preparation work. It does not download from Telegram, upload to Telegram, send WhatsApp media, generate thumbnails, resize content, compress files, encrypt content, or persist media bytes.
++
++## Media Lifecycle
++
++1. A future connector receives media bytes and source metadata.
++2. `MediaService.create_metadata()` normalizes the filename, detects or accepts the mime type, validates size/type compatibility, and calculates the content hash.
++3. `MediaService.prepare_upload()` returns a media id, typed metadata, and a storage key descriptor for a future storage provider.
++4. `MediaService.prepare_download()` returns the same operation descriptor for known metadata.
++5. A later storage provider will use the `MediaStorageProvider` interface to save, load, delete, and check media content.
++
++## Future Storage Providers
++
++Storage backends can implement `MediaStorageProvider` for local disk, MinIO, S3, Redis-backed cache layers, or other object stores in later epics. The current epic only defines the interface, so no backend-specific dependencies or configuration are required.
++
++## Future Downloader and Uploader Integration
++
++Telegram and WhatsApp integrations should treat the Media Engine as a preparation layer. Downloaders can pass bytes and source metadata into `MediaService`; uploaders can consume `MediaMetadata` and storage descriptors once real storage exists.
+diff --git a/tests/media/__init__.py b/tests/media/__init__.py
+new file mode 100644
+index 0000000..9d48db4
+--- /dev/null
++++ b/tests/media/__init__.py
+@@ -0,0 +1 @@
++from __future__ import annotations
+diff --git a/tests/media/test_media_models.py b/tests/media/test_media_models.py
+new file mode 100644
+index 0000000..a0f99b9
+--- /dev/null
++++ b/tests/media/test_media_models.py
+@@ -0,0 +1,19 @@
++from __future__ import annotations
++
++from app.media.models import MediaPrepareRequest, MediaType, Photo
++from app.media.service import MediaService
++
++
++def test_metadata_creation_uses_typed_model() -> None:
++    service = MediaService()
++    metadata = service.create_metadata(
++        MediaPrepareRequest(type=MediaType.PHOTO, filename="sample.jpg"),
++        b"\xff\xd8\xffcontent",
++    )
++
++    assert isinstance(metadata, Photo)
++    assert metadata.type == MediaType.PHOTO
++    assert metadata.mime_type == "image/jpeg"
++    assert metadata.filename == "sample.jpg"
++    assert metadata.size == 10
++    assert len(metadata.sha256) == 64
+diff --git a/tests/media/test_media_router.py b/tests/media/test_media_router.py
+new file mode 100644
+index 0000000..fe9d5db
+--- /dev/null
++++ b/tests/media/test_media_router.py
+@@ -0,0 +1,24 @@
++from __future__ import annotations
++
++
++def test_media_types_endpoint(client) -> None:
++    response = client.get("/api/v1/media/types")
++
++    assert response.status_code == 200
++    assert "photo" in response.json()
++    assert "document" in response.json()
++
++
++def test_mock_media_metadata_endpoint(client) -> None:
++    response = client.get("/api/v1/media/example")
++
++    assert response.status_code == 200
++    payload = response.json()
++    assert payload["type"] == "document"
++    assert payload["filename"] == "example.bin"
++
++
++def test_mock_media_delete_endpoint(client) -> None:
++    response = client.delete("/api/v1/media/example")
++
++    assert response.status_code == 204
+diff --git a/tests/media/test_media_service.py b/tests/media/test_media_service.py
+new file mode 100644
+index 0000000..20f7b21
+--- /dev/null
++++ b/tests/media/test_media_service.py
+@@ -0,0 +1,36 @@
++from __future__ import annotations
++
++import pytest
++
++from app.media.exceptions import MediaTooLarge, UnsupportedMedia
++from app.media.models import MediaPrepareRequest, MediaType
++from app.media.service import MediaService
++
++
++def test_service_validation_rejects_large_media() -> None:
++    service = MediaService(max_media_size=3)
++
++    with pytest.raises(MediaTooLarge):
++        service.create_metadata(MediaPrepareRequest(type=MediaType.DOCUMENT), b"toolong")
++
++
++def test_service_validation_rejects_unsupported_mime() -> None:
++    service = MediaService()
++
++    with pytest.raises(UnsupportedMedia):
++        service.create_metadata(
++            MediaPrepareRequest(type=MediaType.PHOTO, filename="notes.txt"),
++            b"plain text",
++        )
++
++
++def test_prepare_upload_returns_operation_descriptor() -> None:
++    service = MediaService()
++    operation = service.prepare_upload(
++        MediaPrepareRequest(type=MediaType.DOCUMENT, filename="doc.pdf"),
++        b"%PDF-1.7",
++    )
++
++    assert operation.ready is True
++    assert operation.storage_key == f"document/{operation.media_id}"
++    assert operation.metadata.mime_type == "application/pdf"
+diff --git a/tests/media/test_media_utils.py b/tests/media/test_media_utils.py
+new file mode 100644
+index 0000000..6934d54
+--- /dev/null
++++ b/tests/media/test_media_utils.py
+@@ -0,0 +1,23 @@
++from __future__ import annotations
++
++from app.media.utils import calculate_sha256, detect_extension, detect_mime_type, sanitize_filename
++
++
++def test_hash_calculation() -> None:
++    assert calculate_sha256(b"bertele2") == "2e4e1a344e19d56797eb25bfff7718eceb046fa3f68fb963431aa0059faecc22"
++
++
++def test_mime_detection_from_filename_and_content() -> None:
++    assert detect_mime_type("image.png") == "image/png"
++    assert detect_mime_type(content=b"%PDF-1.7") == "application/pdf"
++
++
++def test_extension_detection() -> None:
++    assert detect_extension("archive.tar.gz") == "gz"
++    assert detect_extension(None, "image/jpeg") in {"jpg", "jpeg"}
++
++
++def test_filename_sanitization() -> None:
++    assert sanitize_filename("../My Report!.pdf") == "My_Report_.pdf"
++    assert sanitize_filename("CON") == "CON_file"
++    assert sanitize_filename("") == "media"

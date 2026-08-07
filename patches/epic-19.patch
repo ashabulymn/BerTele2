@@ -1,0 +1,784 @@
+diff --git a/app/api/v1/router.py b/app/api/v1/router.py
+index 68ec56a..9203703 100644
+--- a/app/api/v1/router.py
++++ b/app/api/v1/router.py
+@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
+     apikeys,
+     auth,
+     dialogs,
++    gowa_media,
+     health,
+     messages,
+     meta,
+@@ -30,3 +31,4 @@ router.include_router(sessions.router, tags=["sessions"])
+ router.include_router(webhooks.router, tags=["webhooks"])
+ router.include_router(media_router, tags=["media"])
+ router.include_router(telegram_media_router, tags=["telegram-media"])
++router.include_router(gowa_media.router, tags=["gowa-media"])
+diff --git a/app/media/pipeline/__init__.py b/app/media/pipeline/__init__.py
+new file mode 100644
+index 0000000..8aa0644
+--- /dev/null
++++ b/app/media/pipeline/__init__.py
+@@ -0,0 +1,28 @@
++from app.media.pipeline.builder import MediaPipelineBuilder
++from app.media.pipeline.context import MediaPipelineContext
++from app.media.pipeline.interfaces import MediaPipelineStep, MediaResource
++from app.media.pipeline.pipeline import MediaPipeline
++from app.media.pipeline.registry import PipelineRegistry
++from app.media.pipeline.steps import (
++    DEFAULT_PIPELINE_STEPS,
++    HashStep,
++    MetadataStep,
++    MimeDetectionStep,
++    StorageStep,
++    ValidationStep,
++)
++
++__all__ = [
++    "DEFAULT_PIPELINE_STEPS",
++    "HashStep",
++    "MediaPipeline",
++    "MediaPipelineBuilder",
++    "MediaPipelineContext",
++    "MediaPipelineStep",
++    "MediaResource",
++    "MetadataStep",
++    "MimeDetectionStep",
++    "PipelineRegistry",
++    "StorageStep",
++    "ValidationStep",
++]
+diff --git a/app/media/pipeline/builder.py b/app/media/pipeline/builder.py
+new file mode 100644
+index 0000000..dceff90
+--- /dev/null
++++ b/app/media/pipeline/builder.py
+@@ -0,0 +1,18 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++
++from app.media.pipeline.interfaces import MediaPipelineStep
++from app.media.pipeline.pipeline import MediaPipeline
++
++
++@dataclass(slots=True)
++class MediaPipelineBuilder:
++    _steps: list[MediaPipelineStep] = field(default_factory=list)
++
++    def add_step(self, step: MediaPipelineStep) -> MediaPipelineBuilder:
++        self._steps.append(step)
++        return self
++
++    def build(self) -> MediaPipeline:
++        return MediaPipeline(steps=list(self._steps))
+diff --git a/app/media/pipeline/context.py b/app/media/pipeline/context.py
+new file mode 100644
+index 0000000..bf9678f
+--- /dev/null
++++ b/app/media/pipeline/context.py
+@@ -0,0 +1,34 @@
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from pathlib import Path
++from typing import Any
++
++from app.media.models import MediaMetadata, MediaPrepareRequest
++from app.media.providers.base import StorageProvider
++
++
++@dataclass(slots=True)
++class MediaPipelineContext:
++    connector: str
++    source: str
++    storage_provider: StorageProvider
++    payload: MediaPrepareRequest
++    content: bytes
++    metadata: dict[str, Any] = field(default_factory=dict)
++    temporary_path: Path | None = None
++    configuration: dict[str, Any] = field(default_factory=dict)
++    logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
++    extensions: dict[str, Any] = field(default_factory=dict)
++    sha256: str | None = None
++    mime_type: str | None = None
++    media_metadata: MediaMetadata | None = None
++    storage_key: str | None = None
++
++    def is_step_enabled(self, step_name: str) -> bool:
++        enabled_steps = self.configuration.get("enabled_steps")
++        disabled_steps = self.configuration.get("disabled_steps", ())
++        if enabled_steps is not None:
++            return step_name in set(enabled_steps)
++        return step_name not in set(disabled_steps)
+diff --git a/app/media/pipeline/interfaces.py b/app/media/pipeline/interfaces.py
+new file mode 100644
+index 0000000..e363f27
+--- /dev/null
++++ b/app/media/pipeline/interfaces.py
+@@ -0,0 +1,28 @@
++from __future__ import annotations
++
++from abc import ABC, abstractmethod
++from dataclasses import dataclass
++from typing import TYPE_CHECKING
++
++from app.media.models import MediaMetadata
++
++if TYPE_CHECKING:
++    from app.media.pipeline.context import MediaPipelineContext
++
++
++@dataclass(slots=True)
++class MediaResource:
++    metadata: MediaMetadata
++    storage_key: str
++    content: bytes | None = None
++    ready: bool = True
++
++
++class MediaPipelineStep(ABC):
++    """Interface implemented by media pipeline processing steps."""
++
++    name: str
++
++    @abstractmethod
++    async def execute(self, context: MediaPipelineContext) -> None:
++        """Run the step against the pipeline context."""
+diff --git a/app/media/pipeline/pipeline.py b/app/media/pipeline/pipeline.py
+new file mode 100644
+index 0000000..62d2eba
+--- /dev/null
++++ b/app/media/pipeline/pipeline.py
+@@ -0,0 +1,30 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++
++from app.media.pipeline.context import MediaPipelineContext
++from app.media.pipeline.interfaces import MediaPipelineStep, MediaResource
++
++
++@dataclass(slots=True)
++class MediaPipeline:
++    steps: list[MediaPipelineStep] = field(default_factory=list)
++
++    async def process(self, context: MediaPipelineContext) -> MediaResource:
++        for step in self.steps:
++            if not context.is_step_enabled(step.name):
++                context.logger.debug("Skipping disabled media pipeline step: %s", step.name)
++                continue
++            context.logger.debug("Running media pipeline step: %s", step.name)
++            await step.execute(context)
++
++        if context.media_metadata is None:
++            raise RuntimeError("Media pipeline did not generate metadata")
++        if context.storage_key is None:
++            raise RuntimeError("Media pipeline did not store media")
++
++        return MediaResource(
++            metadata=context.media_metadata,
++            storage_key=context.storage_key,
++            ready=True,
++        )
+diff --git a/app/media/pipeline/registry.py b/app/media/pipeline/registry.py
+new file mode 100644
+index 0000000..94ec424
+--- /dev/null
++++ b/app/media/pipeline/registry.py
+@@ -0,0 +1,22 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++
++from app.media.pipeline.interfaces import MediaPipelineStep
++
++
++@dataclass(slots=True)
++class PipelineRegistry:
++    _steps: dict[str, MediaPipelineStep] = field(default_factory=dict)
++
++    def register(self, step: MediaPipelineStep) -> None:
++        self._steps[step.name] = step
++
++    def get(self, name: str) -> MediaPipelineStep:
++        return self._steps[name]
++
++    def list_steps(self) -> list[str]:
++        return list(self._steps)
++
++    def values(self) -> list[MediaPipelineStep]:
++        return list(self._steps.values())
+diff --git a/app/media/pipeline/steps.py b/app/media/pipeline/steps.py
+new file mode 100644
+index 0000000..00a8119
+--- /dev/null
++++ b/app/media/pipeline/steps.py
+@@ -0,0 +1,95 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++from app.media.models import MEDIA_MODEL_BY_TYPE
++from app.media.pipeline.context import MediaPipelineContext
++from app.media.pipeline.interfaces import MediaPipelineStep
++from app.media.utils import calculate_sha256, detect_mime_type, sanitize_filename
++from app.media.exceptions import MediaTooLarge, UnsupportedMedia
++
++DEFAULT_MAX_MEDIA_SIZE = 50 * 1024 * 1024
++
++SUPPORTED_MIME_PREFIXES = {
++    "photo": ("image/",),
++    "video": ("video/",),
++    "audio": ("audio/",),
++    "voice": ("audio/",),
++    "sticker": ("image/", "application/x-tgsticker"),
++    "animation": ("image/gif", "video/"),
++    "document": ("application/", "text/", "image/", "audio/", "video/"),
++}
++
++
++@dataclass(slots=True)
++class ValidationStep(MediaPipelineStep):
++    name: str = "validation"
++
++    async def execute(self, context: MediaPipelineContext) -> None:
++        max_size = int(context.configuration.get("max_media_size", DEFAULT_MAX_MEDIA_SIZE))
++        if len(context.content) > max_size:
++            raise MediaTooLarge(f"Media exceeds {max_size} bytes")
++
++
++@dataclass(slots=True)
++class HashStep(MediaPipelineStep):
++    name: str = "hash"
++
++    async def execute(self, context: MediaPipelineContext) -> None:
++        context.sha256 = calculate_sha256(context.content)
++
++
++@dataclass(slots=True)
++class MimeDetectionStep(MediaPipelineStep):
++    name: str = "mime_detection"
++
++    async def execute(self, context: MediaPipelineContext) -> None:
++        context.mime_type = context.payload.mime_type or detect_mime_type(
++            context.payload.filename,
++            context.content[:4096],
++        )
++        prefixes = SUPPORTED_MIME_PREFIXES[context.payload.type.value]
++        if not any(context.mime_type == prefix.rstrip("/") or context.mime_type.startswith(prefix) for prefix in prefixes):
++            raise UnsupportedMedia(f"Unsupported mime type for {context.payload.type}: {context.mime_type}")
++
++
++@dataclass(slots=True)
++class MetadataStep(MediaPipelineStep):
++    name: str = "metadata"
++
++    async def execute(self, context: MediaPipelineContext) -> None:
++        model = MEDIA_MODEL_BY_TYPE[context.payload.type]
++        context.media_metadata = model(
++            mime_type=context.mime_type or context.payload.mime_type or detect_mime_type(
++                context.payload.filename,
++                context.content[:4096],
++            ),
++            filename=sanitize_filename(context.payload.filename) if context.payload.filename else None,
++            caption=context.payload.caption,
++            size=len(context.content),
++            width=context.payload.width,
++            height=context.payload.height,
++            duration=context.payload.duration,
++            sha256=context.sha256 or calculate_sha256(context.content),
++            telegram_file_id=context.payload.telegram_file_id,
++            thumbnail_id=context.payload.thumbnail_id,
++        )
++
++
++@dataclass(slots=True)
++class StorageStep(MediaPipelineStep):
++    name: str = "storage"
++
++    async def execute(self, context: MediaPipelineContext) -> None:
++        if context.media_metadata is None:
++            raise RuntimeError("Media metadata must be generated before storage")
++        context.storage_key = await context.storage_provider.save(context.content, context.media_metadata)
++
++
++DEFAULT_PIPELINE_STEPS: tuple[MediaPipelineStep, ...] = (
++    ValidationStep(),
++    HashStep(),
++    MimeDetectionStep(),
++    MetadataStep(),
++    StorageStep(),
++)
+diff --git a/app/media/router.py b/app/media/router.py
+index 3589451..cfea569 100644
+--- a/app/media/router.py
++++ b/app/media/router.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ from fastapi import APIRouter, HTTPException, status
+ 
+ from app.media.models import MediaMetadata, MediaPrepareRequest, MediaType
++from app.media.pipeline.steps import DEFAULT_PIPELINE_STEPS
+ from app.media.service import MediaService
+ 
+ router = APIRouter()
+@@ -27,6 +28,26 @@ async def get_storage_info() -> dict[str, object]:
+     return await service.storage_info()
+ 
+ 
++@router.get("/media/pipeline")
++async def get_media_pipeline() -> dict[str, object]:
++    """Return the active media pipeline configuration."""
++    return {
++        "async": True,
++        "entrypoint": "MediaPipeline",
++        "steps": [step.name for step in DEFAULT_PIPELINE_STEPS],
++        "storage_provider": service.storage_provider_name(),
++    }
++
++
++@router.get("/media/pipeline/steps")
++async def get_media_pipeline_steps() -> list[dict[str, object]]:
++    """Return the default media pipeline execution order."""
++    return [
++        {"name": step.name, "order": index, "enabled": True}
++        for index, step in enumerate(DEFAULT_PIPELINE_STEPS, start=1)
++    ]
++
++
+ @router.get("/media/{media_id}", response_model=MediaMetadata)
+ async def get_media(media_id: str) -> MediaMetadata:
+     """Return mocked media metadata until persistent storage is introduced."""
+diff --git a/app/media/service.py b/app/media/service.py
+index eb999ca..36c7235 100644
+--- a/app/media/service.py
++++ b/app/media/service.py
+@@ -8,6 +8,10 @@ from app.media.models import MEDIA_MODEL_BY_TYPE, MediaMetadata, MediaOperation,
+ from app.media.providers.base import StorageProvider
+ from app.media.providers.factory import StorageFactory
+ from app.media.utils import calculate_sha256, detect_mime_type, sanitize_filename
++from app.media.pipeline.builder import MediaPipelineBuilder
++from app.media.pipeline.context import MediaPipelineContext
++from app.media.pipeline.interfaces import MediaResource
++from app.media.pipeline.steps import DEFAULT_PIPELINE_STEPS
+ 
+ DEFAULT_MAX_MEDIA_SIZE = 50 * 1024 * 1024
+ 
+@@ -147,6 +151,29 @@ class MediaService:
+         """Return the configured storage provider name."""
+         return self._provider.name
+ 
++    async def process(
++        self,
++        payload: MediaPrepareRequest,
++        content: bytes,
++        *,
++        connector: str,
++        source: str,
++        configuration: dict[str, Any] | None = None,
++    ) -> MediaResource:
++        """Process and store media through the reusable media pipeline."""
++        pipeline = MediaPipelineBuilder()
++        for step in DEFAULT_PIPELINE_STEPS:
++            pipeline.add_step(step)
++        context = MediaPipelineContext(
++            connector=connector,
++            source=source,
++            storage_provider=self._provider,
++            payload=payload,
++            content=content,
++            configuration={"max_media_size": self.max_media_size, **(configuration or {})},
++        )
++        return await pipeline.build().process(context)
++
+     @property
+     def _provider(self) -> StorageProvider:
+         if self.storage_provider is None:
+diff --git a/app/telegram/media/downloader.py b/app/telegram/media/downloader.py
+index 98ef478..ff87422 100644
+--- a/app/telegram/media/downloader.py
++++ b/app/telegram/media/downloader.py
+@@ -1,15 +1,13 @@
+ from __future__ import annotations
+ 
+ import asyncio
+-import hashlib
+ import logging
+ from dataclasses import dataclass, field
+ from typing import Any
+ 
+ from app.media.exceptions import MediaNotFound, MediaTooLarge, UnsupportedMedia
+-from app.media.models import MediaMetadata, MediaOperation
++from app.media.pipeline.interfaces import MediaResource
+ from app.media.service import MediaService
+-from app.media.utils import detect_mime_type
+ from app.telegram.media.client import TelegramMediaClient
+ from app.telegram.media.mapper import InvalidTelegramMedia, TelegramMediaMapper
+ 
+@@ -22,14 +20,6 @@ class TelegramMediaTimeout(TimeoutError):
+     """Raised when Telegram media download exceeds the configured timeout."""
+ 
+ 
+-@dataclass(slots=True)
+-class MediaResource:
+-    metadata: MediaMetadata
+-    storage_key: str
+-    content: bytes | None = None
+-    ready: bool = True
+-
+-
+ @dataclass(slots=True)
+ class TelegramMediaDownloader:
+     client: TelegramMediaClient
+@@ -53,16 +43,11 @@ class TelegramMediaDownloader:
+             raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
+ 
+         await self._get_file_metadata(mapping.file_reference, session_id=session_id)
+-        metadata = await asyncio.wait_for(
++        resource = await asyncio.wait_for(
+             self._download_mapped(mapping, session_id=session_id),
+             timeout=self.download_timeout,
+         )
+-        operation = self.media_service.prepare_download(metadata)
+-        return MediaResource(
+-            metadata=operation.metadata,
+-            storage_key=operation.storage_key,
+-            ready=operation.ready,
+-        )
++        return resource
+ 
+     async def _get_file_metadata(self, file_reference: Any, *, session_id: str) -> Any:
+         try:
+@@ -73,7 +58,7 @@ class TelegramMediaDownloader:
+             raise MediaNotFound("Telegram media file was not found")
+         return metadata
+ 
+-    async def _download_mapped(self, mapping, *, session_id: str) -> MediaMetadata:
++    async def _download_mapped(self, mapping, *, session_id: str) -> MediaResource:
+         last_error: Exception | None = None
+         for attempt in range(1, self.retry_count + 1):
+             try:
+@@ -85,10 +70,9 @@ class TelegramMediaDownloader:
+                 self.logger.warning("Telegram media download attempt %s failed", attempt)
+         raise DownloadFailed("Telegram media download failed") from last_error
+ 
+-    async def _stream_to_metadata(self, mapping, *, session_id: str) -> MediaMetadata:
+-        digest = hashlib.sha256()
++    async def _stream_to_metadata(self, mapping, *, session_id: str) -> MediaResource:
+         total_size = 0
+-        sample = bytearray()
++        chunks: list[bytes] = []
+ 
+         async for chunk in self.client.stream_file(
+             mapping.file_reference,
+@@ -98,18 +82,14 @@ class TelegramMediaDownloader:
+             total_size += len(chunk)
+             if total_size > self.max_download_size:
+                 raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
+-            digest.update(chunk)
+-            if len(sample) < 4096:
+-                sample.extend(chunk[: 4096 - len(sample)])
++            chunks.append(chunk)
+ 
+-        mime_type = mapping.mime_type or mapping.payload.mime_type or detect_mime_type(
+-            mapping.payload.filename,
+-            bytes(sample),
++        payload = mapping.payload.model_copy(
++            update={"mime_type": mapping.mime_type or mapping.payload.mime_type}
+         )
+-        return self.media_service.create_streamed_metadata(
+-            mapping.payload,
+-            size=total_size,
+-            sha256=digest.hexdigest(),
+-            mime_type=mime_type,
+-            sample=bytes(sample),
++        return await self.media_service.process(
++            payload,
++            b"".join(chunks),
++            connector="telegram",
++            source=str(mapping.file_reference),
+         )
+diff --git a/docs/media-pipeline.md b/docs/media-pipeline.md
+new file mode 100644
+index 0000000..9b9535a
+--- /dev/null
++++ b/docs/media-pipeline.md
+@@ -0,0 +1,70 @@
++# Media Pipeline
++
++The media pipeline is the single entry point for media processing. Connectors such as Telegram, GoWA, Discord, Slack, Matrix, and Email should pass media bytes plus connector context into `MediaPipeline` instead of orchestrating validation, hashing, metadata generation, or storage themselves.
++
++## Lifecycle
++
++The default pipeline runs asynchronously in this order:
++
++1. `validation` checks size limits.
++2. `hash` calculates the SHA-256 digest.
++3. `mime_detection` detects and validates the MIME type.
++4. `metadata` creates the typed `MediaMetadata` model.
++5. `storage` persists the media through the configured storage provider.
++
++Successful execution returns a `MediaResource` containing metadata, storage key, and readiness state. Exceptions raised by a step are propagated to the caller.
++
++## Context
++
++`MediaPipelineContext` carries connector-neutral execution state:
++
++- `connector` and `source` identify where the media came from.
++- `storage_provider` stores the processed media.
++- `payload` contains the normalized media request.
++- `content` contains media bytes.
++- `metadata`, `temporary_path`, `configuration`, `logger`, and `extensions` support future expansion.
++
++## Builder
++
++Pipelines are composed with `MediaPipelineBuilder`:
++
++```python
++pipeline = (
++    MediaPipelineBuilder()
++    .add_step(ValidationStep())
++    .add_step(HashStep())
++    .add_step(MimeDetectionStep())
++    .add_step(MetadataStep())
++    .add_step(StorageStep())
++    .build()
++)
++```
++
++The builder preserves insertion order, which is the execution order.
++
++## Registry
++
++`PipelineRegistry` stores reusable steps by name:
++
++```python
++registry = PipelineRegistry()
++registry.register(MyPluginStep())
++```
++
++Plugins can register new `MediaPipelineStep` implementations during startup. Application composition can then append registered steps to the builder without changing `MediaPipeline`.
++
++## Configuration
++
++Individual steps can be controlled through `MediaPipelineContext.configuration`:
++
++```python
++configuration = {"disabled_steps": {"hash"}}
++configuration = {"enabled_steps": {"validation", "metadata", "storage"}}
++```
++
++`enabled_steps` acts as an allowlist. If it is not provided, `disabled_steps` is used as a denylist.
++
++## API
++
++- `GET /media/pipeline` returns the active pipeline entry point, default order, and storage provider.
++- `GET /media/pipeline/steps` returns each default step with its execution order.
+diff --git a/tests/pipeline/__init__.py b/tests/pipeline/__init__.py
+new file mode 100644
+index 0000000..9d48db4
+--- /dev/null
++++ b/tests/pipeline/__init__.py
+@@ -0,0 +1 @@
++from __future__ import annotations
+diff --git a/tests/pipeline/test_pipeline.py b/tests/pipeline/test_pipeline.py
+new file mode 100644
+index 0000000..fe3e7a0
+--- /dev/null
++++ b/tests/pipeline/test_pipeline.py
+@@ -0,0 +1,127 @@
++from __future__ import annotations
++
++import pytest
++
++from app.media.exceptions import MediaTooLarge
++from app.media.models import MediaPrepareRequest, MediaType
++from app.media.pipeline import (
++    HashStep,
++    MediaPipelineBuilder,
++    MediaPipelineContext,
++    MediaPipelineStep,
++    MetadataStep,
++    MimeDetectionStep,
++    PipelineRegistry,
++    StorageStep,
++    ValidationStep,
++)
++from app.media.providers.memory import MemoryStorageProvider
++
++
++@pytest.fixture()
++def anyio_backend() -> str:
++    return "asyncio"
++
++
++def make_context(
++    content: bytes = b"%PDF-1.7",
++    *,
++    configuration: dict[str, object] | None = None,
++) -> MediaPipelineContext:
++    return MediaPipelineContext(
++        connector="test",
++        source="unit",
++        storage_provider=MemoryStorageProvider(),
++        payload=MediaPrepareRequest(type=MediaType.DOCUMENT, filename="doc.pdf"),
++        content=content,
++        configuration=configuration or {},
++    )
++
++
++@pytest.mark.anyio
++async def test_pipeline_execution_stores_media() -> None:
++    context = make_context()
++    pipeline = (
++        MediaPipelineBuilder()
++        .add_step(ValidationStep())
++        .add_step(HashStep())
++        .add_step(MimeDetectionStep())
++        .add_step(MetadataStep())
++        .add_step(StorageStep())
++        .build()
++    )
++
++    resource = await pipeline.process(context)
++
++    assert resource.metadata.mime_type == "application/pdf"
++    assert resource.metadata.sha256 == context.sha256
++    assert resource.storage_key == context.sha256
++    assert await context.storage_provider.exists(resource.storage_key)
++
++
++@pytest.mark.anyio
++async def test_custom_steps_can_mutate_context() -> None:
++    class CustomStep(MediaPipelineStep):
++        name = "custom"
++
++        async def execute(self, context: MediaPipelineContext) -> None:
++            context.metadata["custom"] = True
++
++    context = make_context()
++    pipeline = (
++        MediaPipelineBuilder()
++        .add_step(CustomStep())
++        .add_step(ValidationStep())
++        .add_step(HashStep())
++        .add_step(MimeDetectionStep())
++        .add_step(MetadataStep())
++        .add_step(StorageStep())
++        .build()
++    )
++
++    await pipeline.process(context)
++
++    assert context.metadata["custom"] is True
++
++
++def test_registry_registers_custom_steps() -> None:
++    registry = PipelineRegistry()
++    step = ValidationStep()
++
++    registry.register(step)
++
++    assert registry.get("validation") is step
++    assert registry.list_steps() == ["validation"]
++
++
++def test_builder_preserves_step_order() -> None:
++    pipeline = MediaPipelineBuilder().add_step(ValidationStep()).add_step(HashStep()).build()
++
++    assert [step.name for step in pipeline.steps] == ["validation", "hash"]
++
++
++@pytest.mark.anyio
++async def test_failure_propagates_from_step() -> None:
++    context = make_context(b"toolong", configuration={"max_media_size": 3})
++    pipeline = MediaPipelineBuilder().add_step(ValidationStep()).build()
++
++    with pytest.raises(MediaTooLarge):
++        await pipeline.process(context)
++
++
++@pytest.mark.anyio
++async def test_disabled_steps_are_skipped() -> None:
++    context = make_context(configuration={"disabled_steps": {"hash"}})
++    pipeline = (
++        MediaPipelineBuilder()
++        .add_step(HashStep())
++        .add_step(MimeDetectionStep())
++        .add_step(MetadataStep())
++        .add_step(StorageStep())
++        .build()
++    )
++
++    resource = await pipeline.process(context)
++
++    assert context.sha256 is None
++    assert resource.metadata.sha256 == resource.storage_key
+diff --git a/tests/telegram_media/test_downloader.py b/tests/telegram_media/test_downloader.py
+index dda9957..03ec2b1 100644
+--- a/tests/telegram_media/test_downloader.py
++++ b/tests/telegram_media/test_downloader.py
+@@ -7,6 +7,7 @@ import pytest
+ 
+ from app.media.exceptions import MediaNotFound, MediaTooLarge
+ from app.media.models import MediaType
++from app.media.providers.memory import MemoryStorageProvider
+ from app.media.service import MediaService
+ from app.telegram.media.downloader import DownloadFailed, TelegramMediaDownloader
+ 
+@@ -52,7 +53,7 @@ async def test_downloader_hashes_streamed_content() -> None:
+     client = FakeTelegramMediaClient(content)
+     downloader = TelegramMediaDownloader(
+         client=client,
+-        media_service=MediaService(max_media_size=100),
++        media_service=MediaService(max_media_size=100, storage_provider=MemoryStorageProvider()),
+         chunk_size=4,
+     )
+ 
+@@ -69,7 +70,7 @@ async def test_downloader_hashes_streamed_content() -> None:
+     assert resource.metadata.sha256 == expected_hash
+     assert resource.metadata.type == MediaType.DOCUMENT
+     assert resource.metadata.mime_type == "application/pdf"
+-    assert resource.storage_key == f"document/{resource.metadata.id}"
++    assert resource.storage_key == expected_hash
+     assert client.requested_chunk_size == 4
+ 
+ 
+@@ -77,7 +78,7 @@ async def test_downloader_hashes_streamed_content() -> None:
+ async def test_downloader_rejects_large_file_before_download() -> None:
+     downloader = TelegramMediaDownloader(
+         client=FakeTelegramMediaClient([b"ignored"]),
+-        media_service=MediaService(max_media_size=3),
++        media_service=MediaService(max_media_size=3, storage_provider=MemoryStorageProvider()),
+         max_download_size=3,
+     )
+ 
+@@ -89,7 +90,7 @@ async def test_downloader_rejects_large_file_before_download() -> None:
+ async def test_downloader_rejects_large_file_while_streaming() -> None:
+     downloader = TelegramMediaDownloader(
+         client=FakeTelegramMediaClient([b"12", b"34"]),
+-        media_service=MediaService(max_media_size=3),
++        media_service=MediaService(max_media_size=3, storage_provider=MemoryStorageProvider()),
+         max_download_size=3,
+     )
+ 
+@@ -101,7 +102,7 @@ async def test_downloader_rejects_large_file_while_streaming() -> None:
+ async def test_downloader_raises_media_not_found_for_missing_metadata() -> None:
+     downloader = TelegramMediaDownloader(
+         client=FakeTelegramMediaClient([b"content"], metadata=None),
+-        media_service=MediaService(),
++        media_service=MediaService(storage_provider=MemoryStorageProvider()),
+     )
+ 
+     with pytest.raises(MediaNotFound):
+@@ -112,7 +113,7 @@ async def test_downloader_raises_media_not_found_for_missing_metadata() -> None:
+ async def test_downloader_reports_download_failure() -> None:
+     downloader = TelegramMediaDownloader(
+         client=FakeTelegramMediaClient([b"content"], fail_stream=True),
+-        media_service=MediaService(),
++        media_service=MediaService(storage_provider=MemoryStorageProvider()),
+         retry_count=1,
+     )
+ 

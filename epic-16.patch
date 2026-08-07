@@ -1,0 +1,796 @@
+diff --git a/app/api/v1/router.py b/app/api/v1/router.py
+index ce51b11..68ec56a 100644
+--- a/app/api/v1/router.py
++++ b/app/api/v1/router.py
+@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
+     webhooks,
+ )
+ from app.media.router import router as media_router
++from app.telegram.media.router import router as telegram_media_router
+ 
+ router = APIRouter()
+ router.include_router(auth.router, tags=["auth"])
+@@ -28,3 +29,4 @@ router.include_router(messages.router, tags=["messages"])
+ router.include_router(sessions.router, tags=["sessions"])
+ router.include_router(webhooks.router, tags=["webhooks"])
+ router.include_router(media_router, tags=["media"])
++router.include_router(telegram_media_router, tags=["telegram-media"])
+diff --git a/app/core/config.py b/app/core/config.py
+index 5b3f7d6..85684d4 100644
+--- a/app/core/config.py
++++ b/app/core/config.py
+@@ -33,6 +33,10 @@ class Settings(BaseSettings):
+     telegram_session_string: str | None = None
+     telegram_phone_number: str | None = None
+     telegram_bot_token: str | None = None
++    telegram_media_max_download_size: int = Field(default=50 * 1024 * 1024)
++    telegram_media_chunk_size: int = Field(default=1024 * 1024)
++    telegram_media_download_timeout: float = Field(default=30.0)
++    telegram_media_retry_count: int = Field(default=3)
+     websocket_max_connections: int = Field(default=100)
+ 
+     @property
+diff --git a/app/core/container.py b/app/core/container.py
+index 3de0ed6..a7631c9 100644
+--- a/app/core/container.py
++++ b/app/core/container.py
+@@ -18,6 +18,7 @@ from app.session.manager import SessionManager
+ from app.session.repository import SessionRepository
+ from app.session.service import SessionService
+ from app.session.storage import SessionStorage
++from app.telegram.media.service import TelegramMediaService, build_telegram_media_service
+ 
+ 
+ class AppContainer:
+@@ -28,6 +29,11 @@ class AppContainer:
+         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
+         self.event_broker = EventBroker(logger=self.logger)
+         self.telegram_service = TelegramService(settings=settings, logger=self.logger)
++        self.telegram_media_service: TelegramMediaService = build_telegram_media_service(
++            settings=settings,
++            telegram_service=self.telegram_service,
++            logger=self.logger,
++        )
+         self.webhook_retry_policy = WebhookRetryPolicy()
+         self.webhook_signer = WebhookSigner()
+ 
+diff --git a/app/media/service.py b/app/media/service.py
+index 859198b..0b3c753 100644
+--- a/app/media/service.py
++++ b/app/media/service.py
+@@ -54,6 +54,36 @@ class MediaService:
+             thumbnail_id=payload.thumbnail_id,
+         )
+ 
++    def create_streamed_metadata(
++        self,
++        payload: MediaPrepareRequest,
++        *,
++        size: int,
++        sha256: str,
++        mime_type: str,
++        sample: bytes = b"",
++    ) -> MediaMetadata:
++        """Create metadata for content that was hashed while streaming."""
++        filename = sanitize_filename(payload.filename) if payload.filename else None
++        detected_mime_type = mime_type or payload.mime_type or detect_mime_type(filename, sample)
++        self.validate_media(payload.type, sample[: min(len(sample), self.max_media_size + 1)], detected_mime_type)
++        if size > self.max_media_size:
++            raise MediaTooLarge(f"Media exceeds {self.max_media_size} bytes")
++
++        model = MEDIA_MODEL_BY_TYPE[payload.type]
++        return model(
++            mime_type=detected_mime_type,
++            filename=filename,
++            caption=payload.caption,
++            size=size,
++            width=payload.width,
++            height=payload.height,
++            duration=payload.duration,
++            sha256=sha256,
++            telegram_file_id=payload.telegram_file_id,
++            thumbnail_id=payload.thumbnail_id,
++        )
++
+     def prepare_upload(self, payload: MediaPrepareRequest, content: bytes) -> MediaOperation:
+         """Prepare metadata and a deterministic storage key for a future upload."""
+         metadata = self.create_metadata(payload, content)
+diff --git a/app/telegram/media/__init__.py b/app/telegram/media/__init__.py
+new file mode 100644
+index 0000000..32acb10
+--- /dev/null
++++ b/app/telegram/media/__init__.py
+@@ -0,0 +1,6 @@
++from __future__ import annotations
++
++from app.telegram.media.downloader import TelegramMediaDownloader
++from app.telegram.media.service import TelegramMediaService
++
++__all__ = ["TelegramMediaDownloader", "TelegramMediaService"]
+diff --git a/app/telegram/media/client.py b/app/telegram/media/client.py
+new file mode 100644
+index 0000000..7f72137
+--- /dev/null
++++ b/app/telegram/media/client.py
+@@ -0,0 +1,48 @@
++from __future__ import annotations
++
++from collections.abc import AsyncIterator
++from dataclasses import dataclass
++from typing import Any, Protocol
++
++from app.telegram.client import TelegramClientPool
++
++
++class TelegramMediaClient(Protocol):
++    async def get_file_metadata(self, file_reference: Any, *, session_id: str = "default") -> Any:
++        """Return Telegram file metadata for a file reference."""
++
++    async def stream_file(
++        self,
++        file_reference: Any,
++        *,
++        chunk_size: int,
++        session_id: str = "default",
++    ) -> AsyncIterator[bytes]:
++        """Yield file content chunks from Telegram."""
++
++
++@dataclass(slots=True)
++class TelethonMediaClient:
++    client_pool: TelegramClientPool
++
++    async def get_file_metadata(self, file_reference: Any, *, session_id: str = "default") -> Any:
++        async def operation(client):
++            return await client.get_file(file_reference)
++
++        return await self.client_pool.call(
++            operation,
++            action="get telegram media file",
++            session_id=session_id,
++        )
++
++    async def stream_file(
++        self,
++        file_reference: Any,
++        *,
++        chunk_size: int,
++        session_id: str = "default",
++    ) -> AsyncIterator[bytes]:
++        client = self.client_pool.client(session_id)
++        async for chunk in client.iter_download(file_reference, request_size=chunk_size):
++            if chunk:
++                yield bytes(chunk)
+diff --git a/app/telegram/media/downloader.py b/app/telegram/media/downloader.py
+new file mode 100644
+index 0000000..98ef478
+--- /dev/null
++++ b/app/telegram/media/downloader.py
+@@ -0,0 +1,115 @@
++from __future__ import annotations
++
++import asyncio
++import hashlib
++import logging
++from dataclasses import dataclass, field
++from typing import Any
++
++from app.media.exceptions import MediaNotFound, MediaTooLarge, UnsupportedMedia
++from app.media.models import MediaMetadata, MediaOperation
++from app.media.service import MediaService
++from app.media.utils import detect_mime_type
++from app.telegram.media.client import TelegramMediaClient
++from app.telegram.media.mapper import InvalidTelegramMedia, TelegramMediaMapper
++
++
++class DownloadFailed(RuntimeError):
++    """Raised when Telegram media download fails."""
++
++
++class TelegramMediaTimeout(TimeoutError):
++    """Raised when Telegram media download exceeds the configured timeout."""
++
++
++@dataclass(slots=True)
++class MediaResource:
++    metadata: MediaMetadata
++    storage_key: str
++    content: bytes | None = None
++    ready: bool = True
++
++
++@dataclass(slots=True)
++class TelegramMediaDownloader:
++    client: TelegramMediaClient
++    media_service: MediaService
++    mapper: TelegramMediaMapper = field(default_factory=TelegramMediaMapper)
++    max_download_size: int = 50 * 1024 * 1024
++    chunk_size: int = 1024 * 1024
++    download_timeout: float = 30.0
++    retry_count: int = 3
++    logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
++
++    async def download(self, media: Any, *, session_id: str = "default") -> MediaResource:
++        try:
++            mapping = self.mapper.map(media)
++        except InvalidTelegramMedia:
++            raise
++        except Exception as exc:
++            raise InvalidTelegramMedia("Invalid Telegram media") from exc
++
++        if mapping.expected_size and mapping.expected_size > self.max_download_size:
++            raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
++
++        await self._get_file_metadata(mapping.file_reference, session_id=session_id)
++        metadata = await asyncio.wait_for(
++            self._download_mapped(mapping, session_id=session_id),
++            timeout=self.download_timeout,
++        )
++        operation = self.media_service.prepare_download(metadata)
++        return MediaResource(
++            metadata=operation.metadata,
++            storage_key=operation.storage_key,
++            ready=operation.ready,
++        )
++
++    async def _get_file_metadata(self, file_reference: Any, *, session_id: str) -> Any:
++        try:
++            metadata = await self.client.get_file_metadata(file_reference, session_id=session_id)
++        except Exception as exc:
++            raise MediaNotFound("Telegram media file was not found") from exc
++        if metadata is None:
++            raise MediaNotFound("Telegram media file was not found")
++        return metadata
++
++    async def _download_mapped(self, mapping, *, session_id: str) -> MediaMetadata:
++        last_error: Exception | None = None
++        for attempt in range(1, self.retry_count + 1):
++            try:
++                return await self._stream_to_metadata(mapping, session_id=session_id)
++            except (TimeoutError, MediaTooLarge, UnsupportedMedia, InvalidTelegramMedia):
++                raise
++            except Exception as exc:
++                last_error = exc
++                self.logger.warning("Telegram media download attempt %s failed", attempt)
++        raise DownloadFailed("Telegram media download failed") from last_error
++
++    async def _stream_to_metadata(self, mapping, *, session_id: str) -> MediaMetadata:
++        digest = hashlib.sha256()
++        total_size = 0
++        sample = bytearray()
++
++        async for chunk in self.client.stream_file(
++            mapping.file_reference,
++            chunk_size=self.chunk_size,
++            session_id=session_id,
++        ):
++            total_size += len(chunk)
++            if total_size > self.max_download_size:
++                raise MediaTooLarge(f"Telegram media exceeds {self.max_download_size} bytes")
++            digest.update(chunk)
++            if len(sample) < 4096:
++                sample.extend(chunk[: 4096 - len(sample)])
++
++        mime_type = mapping.mime_type or mapping.payload.mime_type or detect_mime_type(
++            mapping.payload.filename,
++            bytes(sample),
++        )
++        return self.media_service.create_streamed_metadata(
++            mapping.payload,
++            size=total_size,
++            sha256=digest.hexdigest(),
++            mime_type=mime_type,
++            sample=bytes(sample),
++        )
+diff --git a/app/telegram/media/mapper.py b/app/telegram/media/mapper.py
+new file mode 100644
+index 0000000..1c334b9
+--- /dev/null
++++ b/app/telegram/media/mapper.py
+@@ -0,0 +1,102 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Any
++
++from app.media.models import MediaPrepareRequest, MediaType
++
++
++class InvalidTelegramMedia(ValueError):
++    """Raised when a Telegram media object cannot be mapped."""
++
++
++@dataclass(slots=True)
++class TelegramMediaMapping:
++    payload: MediaPrepareRequest
++    file_reference: Any
++    expected_size: int | None = None
++    mime_type: str | None = None
++
++
++class TelegramMediaMapper:
++    """Map Telegram media objects into Media Engine preparation requests."""
++
++    def map(self, media: Any, *, caption: str | None = None) -> TelegramMediaMapping:
++        media_type = self._detect_type(media)
++        file_reference = self._value(media, "file_reference", "file_id", "id")
++        if file_reference is None:
++            raise InvalidTelegramMedia("Telegram media is missing a file reference")
++
++        mime_type = self._value(media, "mime_type") or self._default_mime_type(media_type)
++        payload = MediaPrepareRequest(
++            type=media_type,
++            filename=self._value(media, "file_name", "filename", "name"),
++            caption=caption or self._value(media, "caption"),
++            mime_type=mime_type,
++            width=self._value(media, "width", "w"),
++            height=self._value(media, "height", "h"),
++            duration=self._value(media, "duration"),
++            telegram_file_id=str(self._value(media, "file_id", "id", "file_reference")),
++            thumbnail_id=self._value(media, "thumbnail_id", "thumb_id"),
++        )
++        return TelegramMediaMapping(
++            payload=payload,
++            file_reference=file_reference,
++            expected_size=self._value(media, "size", "file_size"),
++            mime_type=mime_type,
++        )
++
++    def _detect_type(self, media: Any) -> MediaType:
++        raw_type = self._value(media, "type", "media_type", "_")
++        if isinstance(raw_type, MediaType):
++            return raw_type
++        if isinstance(raw_type, str):
++            normalized = (
++                raw_type.lower()
++                .removeprefix("messagemedia")
++                .removeprefix("documentattribute")
++            )
++            aliases = {
++                "photo": MediaType.PHOTO,
++                "video": MediaType.VIDEO,
++                "document": MediaType.DOCUMENT,
++                "audio": MediaType.AUDIO,
++                "voice": MediaType.VOICE,
++                "animation": MediaType.ANIMATION,
++                "gif": MediaType.ANIMATION,
++                "sticker": MediaType.STICKER,
++            }
++            for marker, media_type in aliases.items():
++                if marker in normalized:
++                    return media_type
++
++        if self._value(media, "voice"):
++            return MediaType.VOICE
++        if self._value(media, "video"):
++            return MediaType.VIDEO
++        if self._value(media, "round_message"):
++            return MediaType.VIDEO
++        if self._value(media, "animated"):
++            return MediaType.ANIMATION
++        if self._value(media, "sticker"):
++            return MediaType.STICKER
++        if self._value(media, "mime_type", default="").startswith("audio/"):
++            return MediaType.AUDIO
++        if self._value(media, "mime_type", default="").startswith("image/"):
++            return MediaType.PHOTO
++        raise InvalidTelegramMedia("Unsupported Telegram media type")
++
++    def _default_mime_type(self, media_type: MediaType) -> str | None:
++        return {
++            MediaType.PHOTO: "image/jpeg",
++            MediaType.VOICE: "audio/ogg",
++            MediaType.STICKER: "image/webp",
++        }.get(media_type)
++
++    def _value(self, media: Any, *names: str, default: Any = None) -> Any:
++        for name in names:
++            if isinstance(media, dict) and name in media:
++                return media[name]
++            if hasattr(media, name):
++                return getattr(media, name)
++        return default
+diff --git a/app/telegram/media/router.py b/app/telegram/media/router.py
+new file mode 100644
+index 0000000..838cf20
+--- /dev/null
++++ b/app/telegram/media/router.py
+@@ -0,0 +1,84 @@
++from __future__ import annotations
++
++from typing import Annotated, Any
++
++from fastapi import APIRouter, Depends, HTTPException, Request, status
++
++from app.media.exceptions import MediaNotFound, MediaTooLarge, UnsupportedMedia
++from app.media.models import MediaMetadata, MediaType
++from app.schemas.common import APIModel
++from app.telegram.media.downloader import DownloadFailed, TelegramMediaTimeout
++from app.telegram.media.mapper import InvalidTelegramMedia
++from app.telegram.media.service import TelegramMediaService
++
++router = APIRouter(prefix="/telegram/media")
++
++
++class TelegramMediaDownloadRequest(APIModel):
++    media: dict[str, Any]
++    session_id: str = "default"
++
++
++class TelegramMediaDownloadResponse(APIModel):
++    media_id: str
++    metadata: MediaMetadata
++    storage_key: str
++    ready: bool
++
++
++def get_telegram_media_service(request: Request) -> TelegramMediaService:
++    return request.app.state.container.telegram_media_service
++
++
++@router.post("/download", response_model=TelegramMediaDownloadResponse)
++async def download_telegram_media(
++    payload: TelegramMediaDownloadRequest,
++    service: Annotated[TelegramMediaService, Depends(get_telegram_media_service)],
++) -> TelegramMediaDownloadResponse:
++    try:
++        resource = await service.download(payload.media, session_id=payload.session_id)
++    except InvalidTelegramMedia as exc:
++        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
++    except (UnsupportedMedia, MediaTooLarge) as exc:
++        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
++    except MediaNotFound as exc:
++        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
++    except TelegramMediaTimeout as exc:
++        raise HTTPException(
++            status.HTTP_504_GATEWAY_TIMEOUT,
++            detail="Telegram media download timed out",
++        ) from exc
++    except TimeoutError as exc:
++        raise HTTPException(
++            status.HTTP_504_GATEWAY_TIMEOUT,
++            detail="Telegram media download timed out",
++        ) from exc
++    except DownloadFailed as exc:
++        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
++
++    return TelegramMediaDownloadResponse(
++        media_id=resource.metadata.id,
++        metadata=resource.metadata,
++        storage_key=resource.storage_key,
++        ready=resource.ready,
++    )
++
++
++@router.get("/{media_id}", response_model=TelegramMediaDownloadResponse)
++async def get_telegram_media(media_id: str) -> TelegramMediaDownloadResponse:
++    if not media_id.strip():
++        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Media not found")
++    metadata = MediaMetadata(
++        type=MediaType.DOCUMENT,
++        mime_type="application/octet-stream",
++        filename=f"{media_id}.bin",
++        size=0,
++        sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
++        telegram_file_id=media_id,
++    )
++    return TelegramMediaDownloadResponse(
++        media_id=metadata.id,
++        metadata=metadata,
++        storage_key=f"document/{metadata.id}",
++        ready=True,
++    )
+diff --git a/app/telegram/media/service.py b/app/telegram/media/service.py
+new file mode 100644
+index 0000000..c56be39
+--- /dev/null
++++ b/app/telegram/media/service.py
+@@ -0,0 +1,40 @@
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass
++from typing import Any
++
++from app.core.config import Settings
++from app.media.service import MediaService
++from app.services.telegram_service import TelegramService
++from app.telegram.media.client import TelethonMediaClient, TelegramMediaClient
++from app.telegram.media.downloader import MediaResource, TelegramMediaDownloader
++
++
++@dataclass(slots=True)
++class TelegramMediaService:
++    downloader: TelegramMediaDownloader
++
++    async def download(self, media: Any, *, session_id: str = "default") -> MediaResource:
++        return await self.downloader.download(media, session_id=session_id)
++
++
++def build_telegram_media_service(
++    *,
++    settings: Settings,
++    telegram_service: TelegramService,
++    client: TelegramMediaClient | None = None,
++    logger: logging.Logger | None = None,
++) -> TelegramMediaService:
++    media_service = MediaService(max_media_size=settings.telegram_media_max_download_size)
++    media_client = client or TelethonMediaClient(telegram_service.engine.client_pool)
++    downloader = TelegramMediaDownloader(
++        client=media_client,
++        media_service=media_service,
++        max_download_size=settings.telegram_media_max_download_size,
++        chunk_size=settings.telegram_media_chunk_size,
++        download_timeout=settings.telegram_media_download_timeout,
++        retry_count=settings.telegram_media_retry_count,
++        logger=logger or logging.getLogger(__name__),
++    )
++    return TelegramMediaService(downloader=downloader)
+diff --git a/docs/telegram-media.md b/docs/telegram-media.md
+new file mode 100644
+index 0000000..30f1c98
+--- /dev/null
++++ b/docs/telegram-media.md
+@@ -0,0 +1,50 @@
++# Telegram Media Downloader
++
++Epic 16 adds a Telegram-only media downloader that converts Telegram file references into Media Engine metadata. It does not add WhatsApp media sending, upload bridging, thumbnails, transforms, encryption, or storage providers.
++
++## Architecture
++
++The implementation lives in `app/telegram/media/`:
++
++- `client.py` wraps Telegram file metadata lookup and streamed downloads behind a testable protocol.
++- `mapper.py` maps Telegram media objects into `MediaPrepareRequest`.
++- `downloader.py` streams bytes, calculates SHA-256, detects MIME type, and returns a `MediaResource`.
++- `service.py` composes the downloader with the existing `TelegramService` and `MediaService`.
++- `router.py` exposes `/telegram/media/download` and `/telegram/media/{id}`.
++
++The downloader uses `MediaService` for validation, metadata creation, and storage-key preparation. It only uses the existing storage abstraction boundary and does not introduce a storage provider.
++
++## Download Flow
++
++1. The API receives a Telegram media object or file reference payload.
++2. `TelegramMediaMapper` converts the Telegram object into a media preparation request.
++3. `TelegramMediaClient` requests Telegram file metadata.
++4. `TelegramMediaDownloader` streams the file in configured chunks.
++5. Each chunk updates the SHA-256 digest and total byte count.
++6. The downloader detects or carries forward the MIME type.
++7. `MediaService.create_streamed_metadata` validates the media and creates typed `MediaMetadata`.
++8. `MediaService.prepare_download` creates a deterministic storage key for the future storage provider.
++
++## Metadata Mapping
++
++Supported media types:
++
++- Photo
++- Video
++- Document
++- Audio
++- Voice
++- Animation
++- Sticker
++
++The mapper accepts plain dictionaries and Telethon-like objects. New media types can be added by extending `TelegramMediaMapper._detect_type` and, if needed, `MediaType` in the Media Engine.
++
++## Storage Abstraction
++
++Epic 16 does not persist content. The returned `MediaResource` includes metadata and a storage key so Epic 17 can plug in a concrete `MediaStorageProvider` without changing Telegram download semantics.
++
++`GET /telegram/media/{id}` returns mocked metadata until a persistent metadata and content store exists.
++
++## Future Upload Pipeline
++
++The future upload pipeline should consume `MediaResource`, persist streamed content through a concrete storage provider, and pass stored media descriptors to WhatsApp or other channel-specific upload implementations. That work belongs outside this epic.
+diff --git a/tests/telegram_media/__init__.py b/tests/telegram_media/__init__.py
+new file mode 100644
+index 0000000..9d48db4
+--- /dev/null
++++ b/tests/telegram_media/__init__.py
+@@ -0,0 +1 @@
++from __future__ import annotations
+diff --git a/tests/telegram_media/test_downloader.py b/tests/telegram_media/test_downloader.py
+new file mode 100644
+index 0000000..dda9957
+--- /dev/null
++++ b/tests/telegram_media/test_downloader.py
+@@ -0,0 +1,120 @@
++from __future__ import annotations
++
++import hashlib
++from collections.abc import AsyncIterator
++
++import pytest
++
++from app.media.exceptions import MediaNotFound, MediaTooLarge
++from app.media.models import MediaType
++from app.media.service import MediaService
++from app.telegram.media.downloader import DownloadFailed, TelegramMediaDownloader
++
++
++class FakeTelegramMediaClient:
++    def __init__(
++        self,
++        chunks: list[bytes],
++        *,
++        metadata=object(),
++        fail_stream: bool = False,
++    ) -> None:
++        self.chunks = chunks
++        self.metadata = metadata
++        self.fail_stream = fail_stream
++        self.requested_chunk_size: int | None = None
++
++    async def get_file_metadata(self, file_reference, *, session_id: str = "default"):
++        return self.metadata
++
++    async def stream_file(
++        self,
++        file_reference,
++        *,
++        chunk_size: int,
++        session_id: str = "default",
++    ) -> AsyncIterator[bytes]:
++        self.requested_chunk_size = chunk_size
++        if self.fail_stream:
++            raise RuntimeError("download exploded")
++        for chunk in self.chunks:
++            yield chunk
++
++
++@pytest.fixture()
++def anyio_backend() -> str:
++    return "asyncio"
++
++
++@pytest.mark.anyio
++async def test_downloader_hashes_streamed_content() -> None:
++    content = [b"%PDF-", b"1.7 document"]
++    client = FakeTelegramMediaClient(content)
++    downloader = TelegramMediaDownloader(
++        client=client,
++        media_service=MediaService(max_media_size=100),
++        chunk_size=4,
++    )
++
++    resource = await downloader.download(
++        {
++            "type": "document",
++            "file_reference": "doc-ref",
++            "filename": "doc.pdf",
++            "size": sum(len(chunk) for chunk in content),
++        }
++    )
++
++    expected_hash = hashlib.sha256(b"".join(content)).hexdigest()
++    assert resource.metadata.sha256 == expected_hash
++    assert resource.metadata.type == MediaType.DOCUMENT
++    assert resource.metadata.mime_type == "application/pdf"
++    assert resource.storage_key == f"document/{resource.metadata.id}"
++    assert client.requested_chunk_size == 4
++
++
++@pytest.mark.anyio
++async def test_downloader_rejects_large_file_before_download() -> None:
++    downloader = TelegramMediaDownloader(
++        client=FakeTelegramMediaClient([b"ignored"]),
++        media_service=MediaService(max_media_size=3),
++        max_download_size=3,
++    )
++
++    with pytest.raises(MediaTooLarge):
++        await downloader.download({"type": "document", "file_reference": "doc-ref", "size": 4})
++
++
++@pytest.mark.anyio
++async def test_downloader_rejects_large_file_while_streaming() -> None:
++    downloader = TelegramMediaDownloader(
++        client=FakeTelegramMediaClient([b"12", b"34"]),
++        media_service=MediaService(max_media_size=3),
++        max_download_size=3,
++    )
++
++    with pytest.raises(MediaTooLarge):
++        await downloader.download({"type": "document", "file_reference": "doc-ref"})
++
++
++@pytest.mark.anyio
++async def test_downloader_raises_media_not_found_for_missing_metadata() -> None:
++    downloader = TelegramMediaDownloader(
++        client=FakeTelegramMediaClient([b"content"], metadata=None),
++        media_service=MediaService(),
++    )
++
++    with pytest.raises(MediaNotFound):
++        await downloader.download({"type": "document", "file_reference": "missing"})
++
++
++@pytest.mark.anyio
++async def test_downloader_reports_download_failure() -> None:
++    downloader = TelegramMediaDownloader(
++        client=FakeTelegramMediaClient([b"content"], fail_stream=True),
++        media_service=MediaService(),
++        retry_count=1,
++    )
++
++    with pytest.raises(DownloadFailed):
++        await downloader.download({"type": "document", "file_reference": "doc-ref"})
+diff --git a/tests/telegram_media/test_mapper.py b/tests/telegram_media/test_mapper.py
+new file mode 100644
+index 0000000..846dcde
+--- /dev/null
++++ b/tests/telegram_media/test_mapper.py
+@@ -0,0 +1,30 @@
++from __future__ import annotations
++
++import pytest
++
++from app.media.models import MediaType
++from app.telegram.media.mapper import InvalidTelegramMedia, TelegramMediaMapper
++
++
++@pytest.mark.parametrize(
++    ("media", "expected_type"),
++    [
++        ({"type": "photo", "file_reference": "photo-ref"}, MediaType.PHOTO),
++        ({"type": "video", "file_reference": "video-ref"}, MediaType.VIDEO),
++        ({"type": "document", "file_reference": "doc-ref"}, MediaType.DOCUMENT),
++        ({"type": "audio", "file_reference": "audio-ref"}, MediaType.AUDIO),
++        ({"type": "voice", "file_reference": "voice-ref"}, MediaType.VOICE),
++        ({"type": "animation", "file_reference": "animation-ref"}, MediaType.ANIMATION),
++        ({"type": "sticker", "file_reference": "sticker-ref"}, MediaType.STICKER),
++    ],
++)
++def test_mapper_supports_media_types(media, expected_type) -> None:
++    mapping = TelegramMediaMapper().map(media)
++
++    assert mapping.payload.type == expected_type
++    assert mapping.file_reference == media["file_reference"]
++
++
++def test_mapper_rejects_missing_file_reference() -> None:
++    with pytest.raises(InvalidTelegramMedia):
++        TelegramMediaMapper().map({"type": "photo"})
+diff --git a/tests/telegram_media/test_router.py b/tests/telegram_media/test_router.py
+new file mode 100644
+index 0000000..54a0df9
+--- /dev/null
++++ b/tests/telegram_media/test_router.py
+@@ -0,0 +1,37 @@
++from __future__ import annotations
++
++from app.media.models import MediaMetadata, MediaType
++from app.telegram.media.downloader import MediaResource
++from app.telegram.media.router import get_telegram_media_service
++
++
++class FakeTelegramMediaService:
++    async def download(self, media, *, session_id: str = "default") -> MediaResource:
++        metadata = MediaMetadata(
++            type=MediaType.DOCUMENT,
++            mime_type="application/pdf",
++            filename="doc.pdf",
++            size=5,
++            sha256="x" * 64,
++            telegram_file_id=media["file_reference"],
++        )
++        return MediaResource(metadata=metadata, storage_key=f"document/{metadata.id}")
++
++
++def test_download_endpoint(client) -> None:
++    client.app.dependency_overrides[get_telegram_media_service] = lambda: FakeTelegramMediaService()
++    try:
++        response = client.post(
++            "/api/v1/telegram/media/download",
++            json={
++                "media": {"type": "document", "file_reference": "doc-ref"},
++                "session_id": "default",
++            },
++        )
++    finally:
++        client.app.dependency_overrides.clear()
++
++    assert response.status_code == 200
++    payload = response.json()
++    assert payload["metadata"]["telegram_file_id"] == "doc-ref"
++    assert payload["storage_key"].startswith("document/")

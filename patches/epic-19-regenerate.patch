@@ -1,0 +1,2835 @@
+diff --git a/.ai/README.md b/.ai/README.md
+new file mode 100644
+index 0000000..0f415eb
+--- /dev/null
++++ b/.ai/README.md
+@@ -0,0 +1,90 @@
++# BerTele2 AI Development Kit (AI SDK)
++
++The **AI Development Kit** is the authoritative documentation for the BerTele2 project. It is designed so that **any AI coding agent** (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue, etc.) can understand the project without prior knowledge.
++
++This directory contains project intelligence and development guidance only. It does **not** add application features.
++
++---
++
++## Purpose
++
++- Provide a single source of truth for project architecture, conventions, and workflows.
++- Enable any AI agent to onboard quickly and contribute safely.
++- Reduce the risk of unrelated refactoring, duplicated logic, and architectural drift.
++- Document decisions (ADRs) so future changes are informed by history.
++
++## Supported AI Agents
++
++The SDK is agent-agnostic. It works with any agent that can:
++
++- Read Markdown files.
++- Execute git commands.
++- Run tests and linters.
++- Generate patches.
++
++Examples: ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue.
++
++## How to Start a New Epic
++
++1. Read [project.md](project.md) and [architecture.md](architecture.md) to understand the vision and system.
++2. Read [roadmap.md](roadmap.md) to see what is planned and what is complete.
++3. Read [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md) before writing code.
++4. Use the [epic-template.md](epic-template.md) to structure the Epic.
++5. Follow [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md) for implementation and delivery.
++6. Consult [module-map.md](module-map.md) and the [context/](context/) files for subsystem details.
++7. Review your work against [review-checklist.md](review-checklist.md) before finishing.
++
++## How to Review Code
++
++1. Read [review-checklist.md](review-checklist.md) for the full checklist.
++2. Verify the change matches the Epic scope (no unrelated refactoring).
++3. Confirm tests exist and pass (see [testing.md](testing.md)).
++4. Confirm documentation is updated where relevant.
++5. Use the [prompts/review-template.md](prompts/review-template.md) to structure the review.
++
++## How to Generate Patches
++
++1. Complete the Epic and commit it.
++2. Generate the patch:
++
++```bash
++mkdir -p patches
++git diff HEAD~1 HEAD > patches/epic-<id>.patch
++```
++
++3. Verify the patch applies cleanly on a fresh checkout.
++
++## How to Contribute
++
++1. Read [project.md](project.md) and [glossary.md](glossary.md).
++2. Read [development-rules.md](development-rules.md) — these are mandatory.
++3. Read [coding-standards.md](coding-standards.md) for style and typing.
++4. Read [git-workflow.md](git-workflow.md) for branch and commit conventions.
++5. Implement one Epic at a time. Keep changes focused.
++6. Add or update tests. Run the full suite before finishing.
++7. Update documentation (including this SDK) when behavior changes.
++8. Generate a patch and submit it.
++
++---
++
++## Documentation Index
++
++| Document | Purpose |
++| --- | --- |
++| [project.md](project.md) | Vision, mission, goals, users, platforms, philosophy |
++| [architecture.md](architecture.md) | Complete system architecture with diagrams |
++| [roadmap.md](roadmap.md) | Milestones, epics, releases, technical debt |
++| [coding-standards.md](coding-standards.md) | Python style, typing, docstrings, logging, DI |
++| [development-rules.md](development-rules.md) | Mandatory development rules |
++| [workflow.md](workflow.md) | Design → implementation → review → release |
++| [git-workflow.md](git-workflow.md) | Branching, commits, patches, versioning |
++| [module-map.md](module-map.md) | Every module: purpose, deps, APIs, plans |
++| [testing.md](testing.md) | Testing strategy and expectations |
++| [release.md](release.md) | Release process and checklist |
++| [review-checklist.md](review-checklist.md) | Code review checklist |
++| [glossary.md](glossary.md) | Project terminology |
++| [agent-template.md](agent-template.md) | Reusable prompt for AI agents |
++| [epic-template.md](epic-template.md) | Reusable Epic template |
++| [context/](context/) | Per-subsystem deep dives |
++| [prompts/](prompts/) | Reusable prompt templates |
++| [decisions/](decisions/) | Architecture Decision Records (ADRs) |
+\ No newline at end of file
+diff --git a/.ai/agent-template.md b/.ai/agent-template.md
+new file mode 100644
+index 0000000..060d425
+--- /dev/null
++++ b/.ai/agent-template.md
+@@ -0,0 +1,69 @@
++# BerTele2 AI Agent Template
++
++This is a reusable prompt template for any AI coding agent working on BerTele2. Copy this prompt and fill in the placeholders.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project. Follow the instructions below exactly.
++
++### 1. Read the AI SDK
++
++Before making any changes, read the following files in order:
++
++1. `.ai/README.md` — overview and index.
++2. `.ai/project.md` — vision and goals.
++3. `.ai/architecture.md` — system architecture.
++4. `.ai/development-rules.md` — mandatory rules.
++5. `.ai/coding-standards.md` — style and conventions.
++6. `.ai/module-map.md` — module details.
++7. `.ai/roadmap.md` — current and future epics.
++
++Consult the relevant files under `.ai/context/` for the subsystem you are modifying.
++
++### 2. Execute the Epic
++
++Your task is: **{{EPIC_DESCRIPTION}}**
++
++- Follow the Epic template in `.ai/epic-template.md`.
++- Implement one focused change at a time.
++- Follow `.ai/development-rules.md` (no unrelated refactoring, use interfaces, dependency injection, no duplicated logic, no circular imports).
++- Follow `.ai/coding-standards.md` (typing, docstrings, logging, error handling).
++- Add tests for all new behavior. See `.ai/testing.md`.
++- Update documentation (including the AI SDK) when behavior changes.
++
++### 3. Report Changes
++
++When finished, report:
++
++- **Summary**: What was implemented.
++- **Files changed**: List of files created/modified.
++- **Tests**: What tests were added and their results.
++- **Documentation**: What docs were updated.
++- **Commit**: The commit message used.
++- **Patch**: The patch file path.
++
++### 4. Avoid Unrelated Modifications
++
++- Do **not** refactor code unrelated to the Epic.
++- Do **not** change formatting or style of unrelated code.
++- Do **not** add features outside the Epic scope.
++- If you find an issue, note it in the technical debt backlog (`.ai/roadmap.md`) and move on.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{EPIC_DESCRIPTION}}` | The description of the Epic to implement. |
++
++---
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview.
++- [epic-template.md](epic-template.md) — Epic template.
++- [workflow.md](workflow.md) — Development workflow.
++- [review-checklist.md](review-checklist.md) — Review checklist.
+\ No newline at end of file
+diff --git a/.ai/architecture.md b/.ai/architecture.md
+new file mode 100644
+index 0000000..0b9c0ee
+--- /dev/null
++++ b/.ai/architecture.md
+@@ -0,0 +1,246 @@
++# BerTele2 Architecture
++
++This document describes the complete architecture of BerTele2. It is the authoritative reference for how subsystems fit together.
++
++## Overview
++
++BerTele2 is a **self-hosted Telegram MTProto gateway**. It exposes Telegram capabilities through a unified REST + WebSocket API, processes media through a pluggable pipeline, and connects to external automation platforms via connectors and plugins.
++
++```mermaid
++flowchart TB
++    subgraph Clients
++        Dashboard[React Dashboard]
++        API[External API Clients]
++        Webhooks[Webhook Consumers]
++    end
++
++    subgraph Gateway[BerTele2 Gateway]
++        FastAPI[FastAPI App]
++        Security[Security Layer]
++        Router[API v1 Router]
++        EventBus[Event Bus]
++        SessionEngine[Session Engine]
++        TelegramEngine[Telegram Engine]
++        MediaEngine[Media Engine]
++        Pipeline[Message Pipeline]
++        PluginSDK[Plugin SDK]
++        DashboardSvc[Dashboard Service]
++    end
++
++    subgraph External
++        MTProto[Telegram MTProto]
++        GoWA[GoWA Connector]
++        N8N[n8n Connector]
++        Storage[Storage Providers]
++    end
++
++    Dashboard --> FastAPI
++    API --> FastAPI
++    Webhooks --> FastAPI
++    FastAPI --> Security
++    FastAPI --> Router
++    Router --> SessionEngine
++    Router --> TelegramEngine
++    Router --> MediaEngine
++    Router --> DashboardSvc
++    TelegramEngine --> EventBus
++    MediaEngine --> EventBus
++    PluginSDK --> EventBus
++    TelegramEngine --> MTProto
++    MediaEngine --> Storage
++    PluginSDK --> GoWA
++    PluginSDK --> N8N
++    TelegramEngine --> Pipeline
++```
++
++## Session Engine
++
++Manages Telegram session lifecycle: create, connect, disconnect, reconnect, delete. Uses a repository for persistence, a cache for fast access, and a pool of Telethon clients.
++
++```mermaid
++flowchart LR
++    API[Session API] --> Manager[SessionManager]
++    Manager --> Repo[SessionRepository]
++    Manager --> Cache[SessionCache]
++    Manager --> Clients[TelegramClient Pool]
++    Clients --> MTProto[Telegram MTProto]
++```
++
++See [context/core.md](context/core.md) and [context/telegram.md](context/telegram.md).
++
++## Telegram Engine
++
++Wraps Telethon to provide dialogs, messages, entity resolution, and media download. It owns the client pool and the message pipeline.
++
++```mermaid
++flowchart LR
++    TelegramEngine[TelegramEngine]
++    TelegramEngine --> ClientPool[TelegramClientPool]
++    TelegramEngine --> Dialogs[TelegramDialogService]
++    TelegramEngine --> Messages[TelegramMessageService]
++    TelegramEngine --> Resolver[TelegramEntityResolver]
++    TelegramEngine --> Dispatcher[TelegramEventDispatcher]
++    Dispatcher --> Pipeline[MessagePipeline]
++    Pipeline --> EventBus[Event Bus]
++```
++
++See [context/telegram.md](context/telegram.md).
++
++## GoWA Connector
++
++Connects BerTele2 to GoWA (WhatsApp gateway) for sending media. Includes a config, sender, mapper, and service layer.
++
++```mermaid
++flowchart LR
++    API[GoWA Media API] --> Service[GoWAMediaService]
++    Service --> Sender[GoWAMediaSender]
++    Sender --> GoWA[GoWA Gateway]
++    Service --> Config[GoWAConfig]
++    Service --> Resource[MediaResource]
++```
++
++See [context/gowa.md](context/gowa.md).
++
++## Media Engine
++
++Handles media resources: models, storage providers, and the media pipeline.
++
++```mermaid
++flowchart LR
++    MediaService[MediaService]
++    MediaService --> Pipeline[MediaPipeline]
++    Pipeline --> Steps[Pipeline Steps]
++    Steps --> Storage[Storage Providers]
++    Storage --> Local[Local Storage]
++    Storage --> Memory[Memory Storage]
++```
++
++See [context/media.md](context/media.md) and [context/storage.md](context/storage.md).
++
++## Media Pipeline
++
++A pluggable pipeline that processes media through ordered steps: validation, hashing, MIME detection, metadata extraction, and storage.
++
++```mermaid
++flowchart LR
++    Input[Media Input] --> Validation[ValidationStep]
++    Validation --> Hash[HashStep]
++    Hash --> Mime[MimeDetectionStep]
++    Mime --> Metadata[MetadataStep]
++    Metadata --> Storage[StorageStep]
++    Storage --> Output[MediaResource]
++```
++
++See [context/media.md](context/media.md).
++
++## Storage Providers
++
++Pluggable storage backends behind a common `StorageProvider` interface. Currently: local filesystem and in-memory.
++
++```mermaid
++flowchart LR
++    StorageProvider[StorageProvider Interface]
++    StorageProvider --> Local[LocalStorageProvider]
++    StorageProvider --> Memory[MemoryStorageProvider]
++    StorageProvider --> Factory[StorageFactory]
++```
++
++See [context/storage.md](context/storage.md).
++
++## Event Bus
++
++An in-process event bus with publisher, dispatcher, registry, and queue. Subsystems communicate by publishing and subscribing to typed events.
++
++```mermaid
++flowchart LR
++    Publisher[EventPublisher] --> Queue[EventQueue]
++    Queue --> Dispatcher[EventDispatcher]
++    Dispatcher --> Registry[EventRegistry]
++    Registry --> Subscribers[Subscribers]
++```
++
++See [context/eventbus.md](context/eventbus.md).
++
++## Automation Engine
++
++Planned subsystem for workflow automation (triggers, actions, conditions, scheduler). Not yet implemented; documented as an extension point.
++
++See [context/automation.md](context/automation.md).
++
++## Plugin SDK
++
++Allows third-party connectors and automations via a stable plugin interface: `PluginBase`, `PluginManifest`, `PluginManager`, and hook registry.
++
++```mermaid
++flowchart LR
++    PluginManager[PluginManager]
++    PluginManager --> Loader[PluginLoader]
++    PluginManager --> Registry[PluginRegistry]
++    PluginManager --> Hooks[HookRegistry]
++    PluginManager --> EventBus[Event Bus]
++    PluginBase[PluginBase] --> Manifest[PluginManifest]
++    PluginBase --> Context[PluginContext]
++```
++
++See [context/plugins.md](context/plugins.md).
++
++## Dashboard
++
++Provides overview, logs, and metrics via REST endpoints and a WebSocket for real-time updates. Frontend is a React + TypeScript app.
++
++```mermaid
++flowchart LR
++    DashboardSvc[DashboardService] --> Overview[Overview]
++    DashboardSvc --> Logs[Logs]
++    DashboardSvc --> Metrics[Metrics]
++    Realtime[DashboardRealtimeManager] --> WS[WebSocket]
++    React[React Dashboard] --> REST[REST API]
++    React --> WS
++```
++
++See [context/dashboard.md](context/dashboard.md).
++
++## Connector Architecture
++
++Connectors (GoWA, n8n) are plugins that bridge BerTele2 to external services. They expose REST endpoints and subscribe to events.
++
++```mermaid
++flowchart LR
++    Connector[Connector Plugin]
++    Connector --> REST[REST Endpoints]
++    Connector --> EventBus[Event Bus]
++    Connector --> External[External Service]
++```
++
++See [context/plugins.md](context/plugins.md) and [context/gowa.md](context/gowa.md).
++
++## Dependency Injection
++
++Dependencies are wired explicitly via a container (`app/core/container.py`) and constructor injection. Services receive their dependencies as constructor arguments; no global singletons.
++
++See [context/core.md](context/core.md) and [decisions/ADR-0006-dependency-injection.md](decisions/ADR-0006-dependency-injection.md).
++
++## Configuration
++
++Configuration uses Pydantic Settings with a `BERTELE2_` environment prefix. Each subsystem (GoWA, n8n, Telegram) has its own settings class.
++
++See [context/core.md](context/core.md).
++
++## Future Extensions
++
++- **Automation Engine**: workflow triggers, actions, conditions, scheduler.
++- **More Storage Providers**: S3, GCS, Azure Blob.
++- **More Connectors**: additional messaging platforms.
++- **Worker Pool**: background task processing.
++- **Multi-tenant**: per-tenant isolation.
++
++See [roadmap.md](roadmap.md).
++
++---
++
++## Related Documents
++
++- [project.md](project.md) — Vision and goals.
++- [module-map.md](module-map.md) — Module-level details.
++- [context/](context/) — Per-subsystem deep dives.
++- [decisions/](decisions/) — Architecture Decision Records.
+\ No newline at end of file
+diff --git a/.ai/coding-standards.md b/.ai/coding-standards.md
+new file mode 100644
+index 0000000..a05734d
+--- /dev/null
++++ b/.ai/coding-standards.md
+@@ -0,0 +1,118 @@
++# BerTele2 Coding Standards
++
++This document defines the coding standards for the BerTele2 project. All code must follow these conventions.
++
++## Python Style
++
++- Follow **PEP 8**.
++- Use **4 spaces** for indentation (no tabs).
++- Use **double quotes** for strings.
++- Use **`from __future__ import annotations`** at the top of every module.
++- Use **`snake_case`** for functions, methods, and variables.
++- Use **`PascalCase`** for classes.
++- Use **`UPPER_SNAKE_CASE`** for constants.
++- Use **`slots=True`** in dataclasses where appropriate for performance.
++
++## Naming Conventions
++
++| Item | Convention | Example |
++| --- | --- | --- |
++| Module | `snake_case` | `message_pipeline.py` |
++| Class | `PascalCase` | `MessagePipeline` |
++| Function | `snake_case` | `register_handler` |
++| Method | `snake_case` | `dispatch` |
++| Variable | `snake_case` | `session_id` |
++| Constant | `UPPER_SNAKE_CASE` | `DEFAULT_PIPELINE_STEPS` |
++| Private | leading underscore | `_clients` |
++| Type alias | `PascalCase` | `PipelineHandler` |
++
++## Typing
++
++- Use **type hints** on all function signatures and public attributes.
++- Use **`from __future__ import annotations`** to defer evaluation.
++- Use **`typing`** generics: `list[T]`, `dict[K, V]`, `tuple[...]`, `set[T]`.
++- Use **`Optional[T]`** or **`T | None`** (prefer `T | None`).
++- Use **`Any`** sparingly; prefer precise types.
++- Use **`Protocol`** for structural typing where appropriate.
++- Use **`TypeVar`** for generic functions.
++
++## Docstrings
++
++- Use **Google style** docstrings.
++- Document the **purpose**, **Args**, **Returns**, and **Raises**.
++- Keep docstrings concise and accurate.
++
++```python
++def send_media(self, resource: MediaResource, recipient: str) -> dict[str, Any]:
++    """Send a media resource to a recipient.
++
++    Args:
++        resource: The media resource from the pipeline.
++        recipient: The recipient identifier.
++
++    Returns:
++        A dictionary with delivery result information.
++
++    Raises:
++        GoWAValidationError: If the resource or configuration is invalid.
++    """
++```
++
++## Logging
++
++- Use the **`logging`** module.
++- Get a logger per module: `logger = logging.getLogger(__name__)`.
++- Use **structured extra** fields for context.
++- Log at appropriate levels: `debug`, `info`, `warning`, `error`, `exception`.
++- Do **not** log secrets, tokens, or passwords.
++
++```python
++self.logger.info(
++    "Incoming Telegram message",
++    extra={"session_id": context.session_id, "message_id": message_id},
++)
++```
++
++## Dependency Injection
++
++- Use **constructor injection** for all services.
++- Dependencies are passed as constructor arguments.
++- Use **`dataclass`** or explicit `__init__` for wiring.
++- Avoid global singletons and module-level mutable state.
++- Use the container (`app/core/container.py`) for composition root.
++
++See [decisions/ADR-0006-dependency-injection.md](decisions/ADR-0006-dependency-injection.md).
++
++## Error Handling
++
++- Define **domain-specific exceptions** in each subsystem.
++- Raise exceptions with **clear messages**.
++- Catch exceptions at **boundaries** (API, pipeline, worker).
++- Use **`raise ... from exc`** to preserve context.
++- Do **not** swallow exceptions silently.
++
++## Folder Conventions
++
++- Each subsystem lives under `app/<subsystem>/`.
++- Public API is exported via the subsystem's `__init__.py`.
++- Tests live under `tests/<subsystem>/`.
++- Connectors/plugins live under `plugins/<name>/`.
++
++## Testing Conventions
++
++- Use **pytest**.
++- Name test files `test_<module>.py`.
++- Name test functions `test_<behavior>`.
++- Use **fixtures** for shared setup.
++- Mock external dependencies (Telethon, HTTP).
++- Aim for **high coverage** of public behavior.
++
++See [testing.md](testing.md).
++
++---
++
++## Related Documents
++
++- [development-rules.md](development-rules.md) — Mandatory rules.
++- [testing.md](testing.md) — Testing strategy.
++- [review-checklist.md](review-checklist.md) — Review checklist.
+\ No newline at end of file
+diff --git a/.ai/context/automation.md b/.ai/context/automation.md
+new file mode 100644
+index 0000000..2dece73
+--- /dev/null
++++ b/.ai/context/automation.md
+@@ -0,0 +1,60 @@
++# Context: Automation
++
++This document describes the automation subsystem of BerTele2.
++
++## Purpose
++
++The automation subsystem (planned) will provide workflow automation: triggers, actions, conditions, and scheduling. It is not yet implemented; this document defines the intended design and extension points.
++
++## Architecture (Planned)
++
++```mermaid
++flowchart LR
++    Trigger[Trigger] --> Workflow[Workflow]
++    Workflow --> Condition[Condition]
++    Condition --> Action[Action]
++    Action --> Scheduler[Scheduler]
++    Scheduler --> EventBus[Event Bus]
++```
++
++## Main Components (Planned)
++
++- **`Trigger`** — Detects an event that starts a workflow.
++- **`Workflow`** — A defined sequence of steps.
++- **`Condition`** — Gates whether a step runs.
++- **`Action`** — Executes a step (send message, call webhook, etc.).
++- **`Scheduler`** — Runs workflows on a schedule.
++- **`Executor`** — Executes workflow steps.
++- **`Registry`** — Registers triggers, actions, and conditions.
++
++## Dependencies (Planned)
++
++- `app.events` (event bus)
++- `app.telegram` (message actions)
++- `app.integrations` (webhook actions)
++
++## Extension Points
++
++- Register new triggers, actions, and conditions.
++- Add scheduling backends.
++- Add workflow persistence.
++
++## Known Limitations
++
++- Not yet implemented.
++
++## Future Roadmap
++
++- Workflow engine.
++- Scheduler.
++- Workflow persistence and versioning.
++- Audit and metrics.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [eventbus.md](eventbus.md) — Event bus.
++- [roadmap.md](../roadmap.md) — Future epics.
++- [glossary.md](../glossary.md) — Automation and workflow terms.
+\ No newline at end of file
+diff --git a/.ai/context/core.md b/.ai/context/core.md
+new file mode 100644
+index 0000000..cc1f468
+--- /dev/null
++++ b/.ai/context/core.md
+@@ -0,0 +1,54 @@
++# Context: Core
++
++This document describes the core subsystem of BerTele2.
++
++## Purpose
++
++The core subsystem provides configuration, dependency injection, and shared utilities used across the application.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    Settings[Settings] --> Container[AppContainer]
++    Container --> Services[Services]
++    Container --> Engines[Engines]
++    Container --> Plugins[Plugins]
++```
++
++## Main Components
++
++- **`Settings`** — Pydantic settings with `BERTELE2_` environment prefix.
++- **`get_settings`** — Accessor for the settings singleton.
++- **`AppContainer`** — Composition root that wires dependencies.
++- **`app/utils`** — Shared utility functions.
++
++## Dependencies
++
++- Pydantic
++- pydantic-settings
++- SQLAlchemy (via models)
++
++## Extension Points
++
++- Add new settings classes for new subsystems.
++- Register new services in the container.
++
++## Known Limitations
++
++- Settings are loaded at startup; no hot reload.
++- In-memory user store in security (see [security.md](security.md)).
++
++## Future Roadmap
++
++- Centralized logging configuration.
++- Environment-specific settings profiles.
++- Health check integration.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [module-map.md](../module-map.md) — Module details.
++- [decisions/ADR-0006-dependency-injection.md](../decisions/ADR-0006-dependency-injection.md) — DI decision.
+\ No newline at end of file
+diff --git a/.ai/context/dashboard.md b/.ai/context/dashboard.md
+new file mode 100644
+index 0000000..2cb789d
+--- /dev/null
++++ b/.ai/context/dashboard.md
+@@ -0,0 +1,55 @@
++# Context: Dashboard
++
++This document describes the dashboard subsystem of BerTele2.
++
++## Purpose
++
++The dashboard provides overview, logs, and metrics via REST endpoints and a WebSocket for real-time updates. The frontend is a React + TypeScript app.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    DashboardSvc[DashboardService] --> Overview[Overview]
++    DashboardSvc --> Logs[Logs]
++    DashboardSvc --> Metrics[Metrics]
++    Realtime[DashboardRealtimeManager] --> WS[WebSocket]
++    React[React Dashboard] --> REST[REST API]
++    React --> WS
++```
++
++## Main Components
++
++- **`DashboardService`** — Provides overview, logs, and metrics data.
++- **`DashboardRealtimeManager`** — Manages WebSocket connections and broadcasts.
++- **`router`** — REST endpoints (`/dashboard/overview`, `/dashboard/logs`, `/dashboard/metrics`, `/dashboard/ws`).
++- **React frontend** — `dashboard/` directory (Vite + TypeScript).
++
++## Dependencies
++
++- `app.security` (authentication for REST endpoints and WebSocket).
++
++## Extension Points
++
++- Add new dashboard sections.
++- Add real-time event broadcasting.
++- Add real metrics collection.
++
++## Known Limitations
++
++- Metrics are currently stubbed (not real data).
++- WebSocket is single-process.
++
++## Future Roadmap
++
++- Real metrics data.
++- Real-time charts.
++- Multi-process WebSocket support.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [security.md](security.md) — Authentication.
++- [module-map.md](../module-map.md) — Module details.
+\ No newline at end of file
+diff --git a/.ai/context/eventbus.md b/.ai/context/eventbus.md
+new file mode 100644
+index 0000000..45a4f93
+--- /dev/null
++++ b/.ai/context/eventbus.md
+@@ -0,0 +1,65 @@
++# Context: Event Bus
++
++This document describes the event bus subsystem of BerTele2.
++
++## Purpose
++
++The event bus decouples subsystems by allowing them to publish and subscribe to typed events without direct dependencies.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    Publisher[EventPublisher] --> Queue[EventQueue]
++    Queue --> Dispatcher[EventDispatcher]
++    Dispatcher --> Registry[EventRegistry]
++    Registry --> Subscribers[Subscribers]
++```
++
++## Main Components
++
++- **`Event`** — Base class for all events.
++- **`EventBroker`** — Facade that wires publisher, dispatcher, registry, and queue.
++- **`EventPublisher`** — Publishes events to the queue.
++- **`EventDispatcher`** — Dispatches events from the queue to subscribers.
++- **`EventRegistry`** — Registers event types and subscribers.
++- **`EventQueue`** — In-process queue for events.
++- **`EventSubscriber`** — Interface for subscribers.
++- **`Subscription`** — Represents a subscription.
++- **`EventHandler`** — Callable handler for events.
++
++## Built-in Events
++
++- **`PipelineDispatchStarted`** — Published when a pipeline dispatch starts.
++- **`PipelineDispatchCompleted`** — Published when a pipeline dispatch completes.
++- **`PipelineDispatchFailed`** — Published when a pipeline dispatch fails.
++
++## Dependencies
++
++- None (self-contained).
++
++## Extension Points
++
++- Define new event types by subclassing `Event`.
++- Subscribe handlers via the broker.
++- Publish events from any subsystem.
++
++## Known Limitations
++
++- In-process only; no persistence or replay.
++- Single-process dispatch.
++
++## Future Roadmap
++
++- Persistent event log.
++- Cross-process event bus.
++- Event replay.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [telegram.md](telegram.md) — Pipeline events.
++- [plugins.md](plugins.md) — Plugin event access.
++- [decisions/ADR-0005-event-driven.md](../decisions/ADR-0005-event-driven.md) — Event-driven decision.
+\ No newline at end of file
+diff --git a/.ai/context/gowa.md b/.ai/context/gowa.md
+new file mode 100644
+index 0000000..2753c8e
+--- /dev/null
++++ b/.ai/context/gowa.md
+@@ -0,0 +1,59 @@
++# Context: GoWA
++
++This document describes the GoWA connector subsystem of BerTele2.
++
++## Purpose
++
++The GoWA connector bridges BerTele2 to GoWA (a WhatsApp gateway) for sending media to WhatsApp recipients.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    API[GoWA Media API] --> Service[GoWAMediaService]
++    Service --> Sender[GoWAMediaSender]
++    Sender --> GoWA[GoWA Gateway]
++    Service --> Config[GoWAConfig]
++    Service --> Resource[MediaResource]
++```
++
++## Main Components
++
++- **`GoWAConfig`** — Configuration for the GoWA connector (base URL, API key, timeouts, retries).
++- **`GoWAMediaService`** — Service layer that validates config and invokes the sender.
++- **`GoWAMediaSender`** — Sends media to the GoWA gateway.
++- **`GoWAMediaMapper`** — Maps media resources to GoWA payloads.
++- **`GoWAMediaError`** — Base exception for GoWA media errors.
++- **`GoWAMediaSendError`** — Raised when sending fails.
++- **`GoWAUnsupportedMedia`** — Raised for unsupported media types.
++- **`GoWAValidationError`** — Raised for invalid configuration or input.
++
++## Dependencies
++
++- `app.media` (MediaResource)
++- `plugins.gowa.config` (GoWAConfig)
++
++## Extension Points
++
++- Add new media types supported by GoWA.
++- Add receive-media capabilities.
++
++## Known Limitations
++
++- Send-only currently.
++- Mock transport available for development.
++
++## Future Roadmap
++
++- Receive media from GoWA.
++- Delivery status webhooks.
++- More media types.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [media.md](media.md) — Media resources.
++- [plugins.md](plugins.md) — Plugin SDK.
++- [decisions/ADR-0002-plugin-architecture.md](../decisions/ADR-0002-plugin-architecture.md) — Plugin decision.
+\ No newline at end of file
+diff --git a/.ai/context/media.md b/.ai/context/media.md
+new file mode 100644
+index 0000000..f8a2ea2
+--- /dev/null
++++ b/.ai/context/media.md
+@@ -0,0 +1,69 @@
++# Context: Media
++
++This document describes the media subsystem of BerTele2.
++
++## Purpose
++
++The media subsystem handles media resources: models, storage providers, and the media pipeline.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    MediaService[MediaService]
++    MediaService --> Pipeline[MediaPipeline]
++    Pipeline --> Steps[Pipeline Steps]
++    Steps --> Storage[Storage Providers]
++    Storage --> Local[Local Storage]
++    Storage --> Memory[Memory Storage]
++```
++
++## Main Components
++
++- **`MediaService`** — Entry point for media operations.
++- **`MediaResource`** — Unit of media (metadata, storage key, content).
++- **`MediaPipeline`** — Executes ordered processing steps.
++- **`MediaPipelineBuilder`** — Builds pipelines with configured steps.
++- **`MediaPipelineStep`** — Interface for pipeline steps.
++- **`PipelineRegistry`** — Registers and looks up steps.
++- **`MediaMetadata`** — Metadata model for media.
++
++## Pipeline Steps
++
++- **`ValidationStep`** — Validates the media input.
++- **`HashStep`** — Computes a content hash.
++- **`MimeDetectionStep`** — Detects the MIME type.
++- **`MetadataStep`** — Extracts metadata.
++- **`StorageStep`** — Stores the media via a provider.
++
++## Dependencies
++
++- None (self-contained).
++
++## Extension Points
++
++- Add new pipeline steps by implementing `MediaPipelineStep`.
++- Add new storage providers (see [storage.md](storage.md)).
++- Register custom steps in the `PipelineRegistry`.
++
++## Known Limitations
++
++- Only local and memory storage providers currently.
++- No streaming for very large files.
++
++## Future Roadmap
++
++- S3/GCS storage providers.
++- Thumbnail generation.
++- Transcoding support.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [storage.md](storage.md) — Storage providers.
++- [telegram.md](telegram.md) — Telegram media download.
++- [gowa.md](gowa.md) — GoWA media send.
++- [decisions/ADR-0003-media-pipeline.md](../decisions/ADR-0003-media-pipeline.md) — Pipeline decision.
++- [decisions/ADR-0004-storage-provider.md](../decisions/ADR-0004-storage-provider.md) — Storage decision.
+\ No newline at end of file
+diff --git a/.ai/context/plugins.md b/.ai/context/plugins.md
+new file mode 100644
+index 0000000..a45ca04
+--- /dev/null
++++ b/.ai/context/plugins.md
+@@ -0,0 +1,73 @@
++# Context: Plugins
++
++This document describes the plugin subsystem of BerTele2.
++
++## Purpose
++
++The plugin subsystem provides a Plugin SDK that allows third-party connectors and automations to extend BerTele2.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    PluginManager[PluginManager]
++    PluginManager --> Loader[PluginLoader]
++    PluginManager --> Registry[PluginRegistry]
++    PluginManager --> Hooks[HookRegistry]
++    PluginManager --> EventBus[Event Bus]
++    PluginBase[PluginBase] --> Manifest[PluginManifest]
++    PluginBase --> Context[PluginContext]
++```
++
++## Main Components
++
++- **`PluginBase`** — Base class for plugins (lifecycle, manifest, context).
++- **`PluginManifest`** — Plugin metadata (id, name, version, compatibility).
++- **`PluginContext`** — Runtime context for a plugin (config, logger, event access).
++- **`PluginManager`** — Loads, starts, stops, and reloads plugins.
++- **`PluginLoader`** — Loads plugins from paths.
++- **`PluginRegistry`** — Registers and looks up plugins.
++- **`HookRegistry`** — Registers and dispatches hooks.
++- **`PluginLifecycle`** — Manages plugin state transitions.
++
++## Plugin Lifecycle
++
++```mermaid
++stateDiagram-v2
++    [*] --> Loaded: on_load
++    Loaded --> Starting: on_start
++    Starting --> Started: start hook
++    Started --> Stopping: on_stop
++    Stopping --> Stopped: stop hook
++    Stopped --> Starting: on_reload
++```
++
++## Dependencies
++
++- `app.events` (event bus)
++
++## Extension Points
++
++- Create new plugins by subclassing `PluginBase`.
++- Register hooks in the `HookRegistry`.
++- Subscribe to events via the plugin context.
++
++## Known Limitations
++
++- Plugins are loaded from local paths.
++- No plugin marketplace yet.
++
++## Future Roadmap
++
++- Plugin marketplace.
++- Remote plugin loading.
++- Plugin sandboxing.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [eventbus.md](eventbus.md) — Event bus.
++- [gowa.md](gowa.md) — GoWA connector plugin.
++- [decisions/ADR-0002-plugin-architecture.md](../decisions/ADR-0002-plugin-architecture.md) — Plugin decision.
+\ No newline at end of file
+diff --git a/.ai/context/security.md b/.ai/context/security.md
+new file mode 100644
+index 0000000..2abe077
+--- /dev/null
++++ b/.ai/context/security.md
+@@ -0,0 +1,74 @@
++# Context: Security
++
++This document describes the security subsystem of BerTele2.
++
++## Purpose
++
++The security subsystem provides authentication, authorization, API key management, and audit logging.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    SecurityService[SecurityService]
++    SecurityService --> JWT[JWTManager]
++    SecurityService --> APIKey[APIKeyManager]
++    SecurityService --> Audit[AuditLogger]
++    SecurityService --> Hasher[PasswordHasher]
++    SecurityService --> Users[User Store]
++```
++
++## Main Components
++
++- **`SecurityService`** — Facade for authentication and authorization.
++- **`UserRecord`** — User model (roles, permissions, active state).
++- **`JWTManager`** — Encodes/decodes JWT access and refresh tokens.
++- **`APIKeyManager`** — Creates, lists, and revokes API keys.
++- **`PasswordHasher`** — Hashes and verifies passwords.
++- **`AuditLogger`** — Logs security events.
++- **`require_authentication`** — FastAPI dependency for auth.
++- **`require_permissions`** — FastAPI dependency for permission checks.
++
++## Authentication Methods
++
++- **JWT Bearer** — Access and refresh tokens.
++- **API Key** — `x-api-key` header.
++
++## Roles and Permissions
++
++- **admin** — Full access.
++- **api_writer** — API key management.
++- **auditor** — Audit read access.
++- **user** — Basic read access.
++
++## Dependencies
++
++- JWT
++- Password hashing
++
++## Extension Points
++
++- Add new roles and permissions.
++- Add OAuth2 or other auth providers.
++- Add persistent user store.
++
++## Known Limitations
++
++- User store is in-memory (not persistent).
++- No refresh token rotation yet.
++
++## Future Roadmap
++
++- Persistent user store.
++- Refresh token rotation.
++- OAuth2 support.
++- Rate limiting.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [dashboard.md](dashboard.md) — Dashboard authentication.
++- [core.md](core.md) — Settings.
++- [module-map.md](../module-map.md) — Module details.
+\ No newline at end of file
+diff --git a/.ai/context/storage.md b/.ai/context/storage.md
+new file mode 100644
+index 0000000..820bc3b
+--- /dev/null
++++ b/.ai/context/storage.md
+@@ -0,0 +1,53 @@
++# Context: Storage
++
++This document describes the storage subsystem of BerTele2.
++
++## Purpose
++
++The storage subsystem provides pluggable storage backends for media resources behind a common `StorageProvider` interface.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    StorageProvider[StorageProvider Interface]
++    StorageProvider --> Local[LocalStorageProvider]
++    StorageProvider --> Memory[MemoryStorageProvider]
++    StorageProvider --> Factory[StorageFactory]
++```
++
++## Main Components
++
++- **`StorageProvider`** — Interface for storage backends.
++- **`LocalStorageProvider`** — Stores media on the local filesystem.
++- **`MemoryStorageProvider`** — Stores media in memory (for testing/dev).
++- **`StorageFactory`** — Creates storage providers based on configuration.
++
++## Dependencies
++
++- None (self-contained).
++
++## Extension Points
++
++- Add new storage providers by implementing `StorageProvider`.
++- Register providers in the `StorageFactory`.
++
++## Known Limitations
++
++- Only local and memory providers currently.
++- No cloud storage.
++
++## Future Roadmap
++
++- S3 provider.
++- GCS provider.
++- Azure Blob provider.
++- Streaming uploads.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [media.md](media.md) — Media pipeline.
++- [decisions/ADR-0004-storage-provider.md](../decisions/ADR-0004-storage-provider.md) — Storage decision.
+\ No newline at end of file
+diff --git a/.ai/context/telegram.md b/.ai/context/telegram.md
+new file mode 100644
+index 0000000..1a0bf27
+--- /dev/null
++++ b/.ai/context/telegram.md
+@@ -0,0 +1,74 @@
++# Context: Telegram
++
++This document describes the Telegram subsystem of BerTele2.
++
++## Purpose
++
++The Telegram subsystem wraps Telethon to provide dialogs, messages, entity resolution, media download, and event dispatch.
++
++## Architecture
++
++```mermaid
++flowchart LR
++    TelegramEngine[TelegramEngine]
++    TelegramEngine --> ClientPool[TelegramClientPool]
++    TelegramEngine --> Dialogs[TelegramDialogService]
++    TelegramEngine --> Messages[TelegramMessageService]
++    TelegramEngine --> Resolver[TelegramEntityResolver]
++    TelegramEngine --> Dispatcher[TelegramEventDispatcher]
++    Dispatcher --> Pipeline[MessagePipeline]
++    Pipeline --> EventBus[Event Bus]
++```
++
++## Main Components
++
++- **`TelegramEngine`** — Top-level engine that wires the subsystem.
++- **`TelegramClientPool`** — Pool of Telethon clients.
++- **`TelegramSessionRegistry`** — Registry of Telegram sessions.
++- **`TelegramDialogService`** — Lists and retrieves dialogs.
++- **`TelegramMessageService`** — Lists, sends, and forwards messages.
++- **`TelegramEntityResolver`** — Resolves Telegram entities.
++- **`TelegramEventDispatcher`** — Dispatches incoming updates to the pipeline.
++- **`TelegramMediaService`** — Downloads media via the media engine.
++
++## Message Pipeline
++
++Incoming updates flow through the `MessagePipeline`:
++
++- Middleware runs before and after handlers.
++- Handlers match updates via predicates.
++- Events are published to the event bus.
++
++## Dependencies
++
++- Telethon
++- `app.pipeline` (message pipeline)
++- `app.events` (event bus)
++- `app.media` (media download)
++
++## Extension Points
++
++- Register new pipeline handlers with predicates.
++- Add new middleware.
++- Add new media types.
++
++## Known Limitations
++
++- Single-process event dispatch.
++- No multi-tenant isolation yet.
++
++## Future Roadmap
++
++- Multi-tenant sessions.
++- More media types.
++- Message editing/deletion events.
++
++---
++
++## Related Documents
++
++- [architecture.md](../architecture.md) — System architecture.
++- [media.md](media.md) — Media download.
++- [eventbus.md](eventbus.md) — Event bus.
++- [core.md](core.md) — Session engine.
++- [decisions/ADR-0005-event-driven.md](../decisions/ADR-0005-event-driven.md) — Event-driven decision.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0001-project-vision.md b/.ai/decisions/ADR-0001-project-vision.md
+new file mode 100644
+index 0000000..31543ee
+--- /dev/null
++++ b/.ai/decisions/ADR-0001-project-vision.md
+@@ -0,0 +1,39 @@
++# ADR-0001: Project Vision
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 needed a clear vision to guide development. The project is a self-hosted Telegram MTProto gateway that connects Telegram to external automation platforms.
++
++## Decision
++
++Adopt the vision of a **self-hosted Telegram MTProto gateway** with:
++
++- A unified REST + WebSocket API.
++- A pluggable media pipeline.
++- An event-driven architecture.
++- A plugin SDK for connectors.
++- A dashboard for observability.
++- Strong security (JWT, API keys, roles).
++
++## Consequences
++
++- Development is guided by a clear, consistent vision.
++- New features are evaluated against the vision.
++- The architecture supports extensibility and observability.
++
++## Alternatives Considered
++
++- **Cloud-only gateway**: Rejected — self-hosting is a core requirement.
++- **Monolithic single-purpose app**: Rejected — extensibility is required.
++- **No dashboard**: Rejected — observability is a goal.
++
++---
++
++## Related Documents
++
++- [project.md](../project.md) — Project vision.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0002-plugin-architecture.md b/.ai/decisions/ADR-0002-plugin-architecture.md
+new file mode 100644
+index 0000000..026a057
+--- /dev/null
++++ b/.ai/decisions/ADR-0002-plugin-architecture.md
+@@ -0,0 +1,44 @@
++# ADR-0002: Plugin Architecture
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 needs to support third-party connectors and automations (GoWA, n8n, and future platforms). A stable plugin interface is required so extensions can be added without modifying the core.
++
++## Decision
++
++Adopt a **Plugin SDK** with:
++
++- `PluginBase` — base class with lifecycle and manifest.
++- `PluginManifest` — metadata and compatibility.
++- `PluginContext` — runtime context (config, logger, event access).
++- `PluginManager` — loads, starts, stops, and reloads plugins.
++- `PluginLoader` — loads plugins from paths.
++- `PluginRegistry` — registers and looks up plugins.
++- `HookRegistry` — registers and dispatches hooks.
++
++Plugins communicate with the core via the event bus and hooks.
++
++## Consequences
++
++- Third-party extensions are isolated and versioned.
++- The core remains stable and extensible.
++- Plugins can subscribe to events and register hooks.
++- Requires careful lifecycle management.
++
++## Alternatives Considered
++
++- **Hardcoded connectors**: Rejected — not extensible.
++- **Microservice per connector**: Rejected — too heavy for in-process needs.
++- **No plugin system**: Rejected — extensibility is a goal.
++
++---
++
++## Related Documents
++
++- [context/plugins.md](../context/plugins.md) — Plugin subsystem.
++- [context/eventbus.md](../context/eventbus.md) — Event bus.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0003-media-pipeline.md b/.ai/decisions/ADR-0003-media-pipeline.md
+new file mode 100644
+index 0000000..df43dc4
+--- /dev/null
++++ b/.ai/decisions/ADR-0003-media-pipeline.md
+@@ -0,0 +1,42 @@
++# ADR-0003: Media Pipeline
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 needs to process media consistently (download, validate, hash, detect MIME, extract metadata, store). A pluggable pipeline is required so steps can be added or reordered without modifying the core.
++
++## Decision
++
++Adopt a **pluggable media pipeline** with:
++
++- `MediaPipeline` — executes ordered processing steps.
++- `MediaPipelineStep` — interface for steps.
++- `MediaPipelineBuilder` — builds pipelines with configured steps.
++- `PipelineRegistry` — registers and looks up steps.
++- `MediaResource` — the unit of media flowing through the pipeline.
++
++Default steps: validation, hashing, MIME detection, metadata extraction, storage.
++
++## Consequences
++
++- Media processing is consistent and extensible.
++- Steps can be added, removed, or reordered.
++- The pipeline is testable in isolation.
++- Requires careful ordering of steps.
++
++## Alternatives Considered
++
++- **Monolithic media handler**: Rejected — not extensible.
++- **Hardcoded processing chain**: Rejected — not configurable.
++- **No pipeline**: Rejected — consistency is required.
++
++---
++
++## Related Documents
++
++- [context/media.md](../context/media.md) — Media subsystem.
++- [context/storage.md](../context/storage.md) — Storage providers.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0004-storage-provider.md b/.ai/decisions/ADR-0004-storage-provider.md
+new file mode 100644
+index 0000000..cc34eb3
+--- /dev/null
++++ b/.ai/decisions/ADR-0004-storage-provider.md
+@@ -0,0 +1,39 @@
++# ADR-0004: Storage Provider
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 needs to store media resources. Different deployments may require different storage backends (local filesystem, memory, cloud). A common interface is required so backends can be swapped.
++
++## Decision
++
++Adopt a **pluggable storage provider** architecture with:
++
++- `StorageProvider` — interface for storage backends.
++- `LocalStorageProvider` — local filesystem storage.
++- `MemoryStorageProvider` — in-memory storage (testing/dev).
++- `StorageFactory` — creates providers based on configuration.
++
++## Consequences
++
++- Storage backends are swappable.
++- New providers (S3, GCS) can be added without modifying the core.
++- The factory centralizes provider selection.
++- Requires consistent provider behavior.
++
++## Alternatives Considered
++
++- **Hardcoded local storage**: Rejected — not portable.
++- **Single cloud provider**: Rejected — not flexible.
++- **No abstraction**: Rejected — portability is required.
++
++---
++
++## Related Documents
++
++- [context/storage.md](../context/storage.md) — Storage subsystem.
++- [context/media.md](../context/media.md) — Media pipeline.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0005-event-driven.md b/.ai/decisions/ADR-0005-event-driven.md
+new file mode 100644
+index 0000000..5fe0578
+--- /dev/null
++++ b/.ai/decisions/ADR-0005-event-driven.md
+@@ -0,0 +1,42 @@
++# ADR-0005: Event-Driven Architecture
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 subsystems (Telegram, media, plugins, webhooks) need to communicate without tight coupling. A decoupled communication mechanism is required.
++
++## Decision
++
++Adopt an **event-driven architecture** with an in-process event bus:
++
++- `EventBroker` — facade wiring publisher, dispatcher, registry, and queue.
++- `EventPublisher` — publishes events.
++- `EventDispatcher` — dispatches events to subscribers.
++- `EventRegistry` — registers event types and subscribers.
++- `EventQueue` — in-process queue.
++- Typed events (e.g., `PipelineDispatchStarted`, `PipelineDispatchCompleted`, `PipelineDispatchFailed`).
++
++## Consequences
++
++- Subsystems are decoupled.
++- New subscribers can be added without modifying publishers.
++- Events provide observability.
++- Requires careful event design and error handling.
++
++## Alternatives Considered
++
++- **Direct method calls**: Rejected — tight coupling.
++- **Message queue (external)**: Rejected — too heavy for in-process needs.
++- **No event system**: Rejected — decoupling is required.
++
++---
++
++## Related Documents
++
++- [context/eventbus.md](../context/eventbus.md) — Event bus subsystem.
++- [context/telegram.md](../context/telegram.md) — Pipeline events.
++- [context/plugins.md](../context/plugins.md) — Plugin event access.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/decisions/ADR-0006-dependency-injection.md b/.ai/decisions/ADR-0006-dependency-injection.md
+new file mode 100644
+index 0000000..7692d81
+--- /dev/null
++++ b/.ai/decisions/ADR-0006-dependency-injection.md
+@@ -0,0 +1,41 @@
++# ADR-0006: Dependency Injection
++
++## Status
++
++Accepted
++
++## Context
++
++BerTele2 services need to be testable, decoupled, and configurable. Global singletons and module-level mutable state make testing and extension difficult.
++
++## Decision
++
++Adopt **constructor-based dependency injection**:
++
++- Services receive their dependencies as constructor arguments.
++- Use `dataclass` or explicit `__init__` for wiring.
++- Use a composition root (`AppContainer`) to wire the application.
++- Avoid global singletons and module-level mutable state.
++- Use `Protocol` or ABC interfaces for extension points.
++
++## Consequences
++
++- Services are testable in isolation (mock dependencies).
++- Dependencies are explicit and discoverable.
++- The composition root centralizes wiring.
++- Requires discipline to avoid global state.
++
++## Alternatives Considered
++
++- **Global singletons**: Rejected — hard to test and extend.
++- **Service locator**: Rejected — hides dependencies.
++- **No DI**: Rejected — tight coupling.
++
++---
++
++## Related Documents
++
++- [context/core.md](../context/core.md) — Core subsystem.
++- [coding-standards.md](../coding-standards.md) — DI conventions.
++- [development-rules.md](../development-rules.md) — Mandatory rules.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/development-rules.md b/.ai/development-rules.md
+new file mode 100644
+index 0000000..7cd7625
+--- /dev/null
++++ b/.ai/development-rules.md
+@@ -0,0 +1,53 @@
++# BerTele2 Development Rules
++
++These are **mandatory** rules for all development on BerTele2. Every Epic, bugfix, refactor, and release must comply.
++
++## Core Rules
++
++1. **One Epic = One Responsibility.** Each Epic addresses a single, well-defined responsibility. No scope creep.
++
++2. **No Unrelated Refactoring.** Do not refactor code unrelated to the current Epic. If you find an issue, note it in the technical debt backlog ([roadmap.md](roadmap.md)) and address it in a separate Epic.
++
++3. **Backward Compatibility.** Never break public APIs without a deprecation cycle. Additive changes are preferred.
++
++4. **Use Interfaces.** Depend on abstractions, not concrete implementations. Define `Protocol` or ABC interfaces for extension points.
++
++5. **Prefer Composition.** Compose small, focused units rather than deep inheritance hierarchies.
++
++6. **Use Dependency Injection.** Wire dependencies explicitly via constructor injection. Avoid global singletons and module-level mutable state.
++
++7. **No Duplicated Logic.** Reuse shared services and utilities. If logic is needed in two places, extract it.
++
++8. **No Circular Imports.** Keep module boundaries clean. Import at the top of the module; use `TYPE_CHECKING` for type-only imports.
++
++9. **Keep Modules Independent.** Each subsystem should be self-contained and communicate via interfaces or the event bus.
++
++10. **Test Every Behavior.** Every public behavior must have a test. See [testing.md](testing.md).
++
++11. **Document Changes.** Update the AI SDK and relevant docs when behavior changes.
++
++12. **Follow Coding Standards.** All code must follow [coding-standards.md](coding-standards.md).
++
++## Additional Rules
++
++- **No secrets in code.** Use environment variables and `.env`.
++- **No silent failures.** Log errors and raise domain-specific exceptions.
++- **No dead code.** Remove unused imports, functions, and files.
++- **No broad `except Exception`** without handling or re-raising.
++- **Keep functions small.** Prefer many small functions over one large one.
++- **Name things clearly.** Use descriptive names that convey intent.
++
++## Enforcement
++
++- Code reviews check compliance with these rules. See [review-checklist.md](review-checklist.md).
++- CI runs tests and linters.
++- AI agents must follow these rules when contributing.
++
++---
++
++## Related Documents
++
++- [coding-standards.md](coding-standards.md) — Style and conventions.
++- [workflow.md](workflow.md) — Development workflow.
++- [review-checklist.md](review-checklist.md) — Review checklist.
++- [roadmap.md](roadmap.md) — Technical debt backlog.
+\ No newline at end of file
+diff --git a/.ai/epic-template.md b/.ai/epic-template.md
+new file mode 100644
+index 0000000..e93d6a8
+--- /dev/null
++++ b/.ai/epic-template.md
+@@ -0,0 +1,85 @@
++# BerTele2 Epic Template
++
++Use this template to structure any Epic on BerTele2. Copy the template and fill in the placeholders.
++
++---
++
++# Epic {{EPIC_ID}}: {{EPIC_TITLE}}
++
++## Overview
++
++{{Brief description of the Epic and its purpose.}}
++
++## Goal
++
++{{The single, well-defined goal of this Epic.}}
++
++## Scope
++
++- {{In-scope item 1}}
++- {{In-scope item 2}}
++
++## Out of Scope
++
++- {{Out-of-scope item 1}}
++- {{Out-of-scope item 2}}
++
++## Tasks
++
++- [ ] {{Task 1}}
++- [ ] {{Task 2}}
++- [ ] {{Task 3}}
++
++## Acceptance Criteria
++
++- [ ] {{Criterion 1}}
++- [ ] {{Criterion 2}}
++- [ ] {{Criterion 3}}
++
++## Documentation
++
++- [ ] Update relevant docs in `.ai/`.
++- [ ] Add ADR if a significant decision is made.
++
++## Testing
++
++- [ ] Unit tests for new behavior.
++- [ ] Full suite passes (`pytest`).
++
++## Commit
++
++Commit message: `{{TYPE}}({{SCOPE}}): {{DESCRIPTION}}`
++
++## Patch
++
++```bash
++mkdir -p patches
++git diff HEAD~1 HEAD > patches/epic-{{EPIC_ID}}.patch
++```
++
++## Push
++
++```bash
++git push origin $(git branch --show-current)
++```
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{EPIC_ID}}` | Epic identifier (e.g., A0, 20). |
++| `{{EPIC_TITLE}}` | Short title. |
++| `{{TYPE}}` | Commit type (`feat`, `fix`, `docs`, etc.). |
++| `{{SCOPE}}` | Commit scope (e.g., `media`, `telegram`). |
++| `{{DESCRIPTION}}` | Short commit description. |
++
++---
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview.
++- [workflow.md](workflow.md) — Development workflow.
++- [git-workflow.md](git-workflow.md) — Commit and patch conventions.
++- [agent-template.md](agent-template.md) — AI agent prompt template.
+\ No newline at end of file
+diff --git a/.ai/git-workflow.md b/.ai/git-workflow.md
+new file mode 100644
+index 0000000..bb03e9d
+--- /dev/null
++++ b/.ai/git-workflow.md
+@@ -0,0 +1,81 @@
++# BerTele2 Git Workflow
++
++This document defines the git workflow for BerTele2.
++
++## Branch Strategy
++
++- **`main`** — stable, release-ready branch.
++- **Feature branches** — one per Epic: `epic/<id>-<short-name>`.
++- **Bugfix branches** — `fix/<short-name>`.
++- **Refactor branches** — `refactor/<short-name>`.
++
++## Commit Style
++
++Use **Conventional Commits**:
++
++```
++<type>(<scope>): <description>
++```
++
++Types:
++
++| Type | Purpose |
++| --- | --- |
++| `feat` | New feature |
++| `fix` | Bug fix |
++| `docs` | Documentation |
++| `refactor` | Refactoring |
++| `test` | Tests |
++| `chore` | Maintenance |
++| `build` | Build/deps |
++| `ci` | CI config |
++
++Examples:
++
++```
++feat(media): add S3 storage provider
++fix(telegram): handle reconnect timeout
++docs(ai): introduce BerTele2 AI Development Kit
++test(events): add broker integration tests
++```
++
++## Patch Generation
++
++After committing an Epic:
++
++```bash
++mkdir -p patches
++git diff HEAD~1 HEAD > patches/epic-<id>.patch
++```
++
++Verify the patch applies cleanly on a fresh checkout.
++
++## Push Workflow
++
++```bash
++git push origin $(git branch --show-current)
++```
++
++## Merge Strategy
++
++- Use **squash merge** for feature branches into `main`.
++- Keep the commit history clean and linear.
++- Resolve conflicts carefully; do not force-push shared branches.
++
++## Versioning
++
++Follow **Semantic Versioning** (MAJOR.MINOR.PATCH):
++
++- **MAJOR** — breaking changes.
++- **MINOR** — backward-compatible features.
++- **PATCH** — backward-compatible bug fixes.
++
++See [release.md](release.md) for the release process.
++
++---
++
++## Related Documents
++
++- [workflow.md](workflow.md) — Development workflow.
++- [release.md](release.md) — Release process.
++- [roadmap.md](roadmap.md) — Milestones and epics.
+\ No newline at end of file
+diff --git a/.ai/glossary.md b/.ai/glossary.md
+new file mode 100644
+index 0000000..11e7998
+--- /dev/null
++++ b/.ai/glossary.md
+@@ -0,0 +1,66 @@
++# BerTele2 Glossary
++
++This document explains important project terms.
++
++## MediaResource
++
++A unit of media processed by the media engine. Contains metadata, a storage key, and optional content. Produced by the media pipeline.
++
++See [context/media.md](context/media.md).
++
++## Pipeline
++
++A sequence of processing steps applied to an input. Two pipelines exist:
++
++- **Media Pipeline**: processes media (validation, hash, MIME, metadata, storage).
++- **Message Pipeline**: processes incoming Telegram updates (middleware + handlers).
++
++See [context/media.md](context/media.md) and [context/telegram.md](context/telegram.md).
++
++## Provider
++
++A pluggable backend behind a common interface. Examples: storage providers (local, memory).
++
++See [context/storage.md](context/storage.md).
++
++## Connector
++
++A plugin that bridges BerTele2 to an external service (GoWA, n8n). Exposes REST endpoints and subscribes to events.
++
++See [context/plugins.md](context/plugins.md) and [context/gowa.md](context/gowa.md).
++
++## Session
++
++A Telegram session representing a connected account. Managed by the session engine with lifecycle states (disconnected, connecting, connected, error).
++
++See [context/core.md](context/core.md) and [context/telegram.md](context/telegram.md).
++
++## Plugin
++
++A self-contained extension built on the Plugin SDK. Has a manifest, lifecycle, and can subscribe to events.
++
++See [context/plugins.md](context/plugins.md).
++
++## Bridge
++
++A component that connects two systems. Connectors act as bridges between BerTele2 and external platforms.
++
++## Automation
++
++A planned subsystem for workflow automation: triggers, actions, conditions, and scheduling.
++
++See [context/automation.md](context/automation.md).
++
++## Workflow
++
++A defined sequence of steps or actions executed by the automation engine (planned).
++
++See [context/automation.md](context/automation.md).
++
++---
++
++## Related Documents
++
++- [project.md](project.md) — Vision and goals.
++- [architecture.md](architecture.md) — System architecture.
++- [context/](context/) — Per-subsystem deep dives.
+\ No newline at end of file
+diff --git a/.ai/module-map.md b/.ai/module-map.md
+new file mode 100644
+index 0000000..a3e6fed
+--- /dev/null
++++ b/.ai/module-map.md
+@@ -0,0 +1,169 @@
++# BerTele2 Module Map
++
++This document describes every module in the BerTele2 project: purpose, dependencies, public APIs, and future plans.
++
++## Application Modules (`app/`)
++
++### `app/api`
++
++- **Purpose**: REST API layer (v1 endpoints).
++- **Dependencies**: All service modules.
++- **Public APIs**: Routers for auth, apikeys, users, health, meta, dialogs, telegram, messages, sessions, webhooks, media, telegram-media, gowa-media.
++- **Future plans**: Versioned API expansion.
++
++### `app/core`
++
++- **Purpose**: Core configuration, container, and shared utilities.
++- **Dependencies**: Pydantic, pydantic-settings.
++- **Public APIs**: `Settings`, `get_settings`, `AppContainer`.
++- **Future plans**: Centralized logging config.
++
++### `app/dashboard`
++
++- **Purpose**: Dashboard service (overview, logs, metrics) and realtime WebSocket.
++- **Dependencies**: Security.
++- **Public APIs**: `DashboardService`, `DashboardRealtimeManager`.
++- **Future plans**: Real metrics data.
++
++### `app/events`
++
++- **Purpose**: In-process event bus.
++- **Dependencies**: None (self-contained).
++- **Public APIs**: `EventBroker`, `EventPublisher`, `EventDispatcher`, `EventRegistry`, `EventQueue`, `Event`, `Subscription`.
++- **Future plans**: Persistent event log.
++
++### `app/gowa`
++
++- **Purpose**: GoWA media service (send media to WhatsApp).
++- **Dependencies**: `app.media`, `plugins.gowa.config`.
++- **Public APIs**: `GoWAMediaService`, `GoWAMediaSender`, `GoWAMediaMapper`.
++- **Future plans**: Receive media from GoWA.
++
++### `app/integrations`
++
++- **Purpose**: External integrations (webhooks).
++- **Dependencies**: `app.events`.
++- **Public APIs**: `WebhookManager`, `WebhookDispatcher`, `WebhookRepository`.
++- **Future plans**: More integration types.
++
++### `app/media`
++
++- **Purpose**: Media engine — models, storage providers, pipeline.
++- **Dependencies**: None (self-contained).
++- **Public APIs**: `MediaService`, `MediaResource`, `MediaPipeline`, `MediaPipelineBuilder`, `StorageProvider`, `StorageFactory`, `LocalStorageProvider`, `MemoryStorageProvider`.
++- **Future plans**: S3/GCS providers.
++
++### `app/middleware`
++
++- **Purpose**: HTTP middleware.
++- **Dependencies**: Starlette.
++- **Public APIs**: Middleware classes.
++- **Future plans**: Rate limiting.
++
++### `app/models`
++
++- **Purpose**: SQLAlchemy ORM models.
++- **Dependencies**: SQLAlchemy.
++- **Public APIs**: Model classes.
++- **Future plans**: Migration coverage.
++
++### `app/pipeline`
++
++- **Purpose**: Message pipeline (middleware + handlers).
++- **Dependencies**: `app.events`.
++- **Public APIs**: `MessagePipeline`, `PipelineContext`, `PipelineResult`, `PipelineMiddleware`, `PipelineHandler`.
++- **Future plans**: More built-in handlers.
++
++### `app/plugins`
++
++- **Purpose**: Plugin SDK.
++- **Dependencies**: `app.events`.
++- **Public APIs**: `PluginBase`, `PluginManager`, `PluginManifest`, `PluginContext`, `HookRegistry`, `PluginLoader`, `PluginRegistry`.
++- **Future plans**: Plugin marketplace.
++
++### `app/schemas`
++
++- **Purpose**: Pydantic schemas for API.
++- **Dependencies**: Pydantic.
++- **Public APIs**: Schema classes.
++- **Future plans**: Versioned schemas.
++
++### `app/security`
++
++- **Purpose**: Authentication, authorization, API keys, audit.
++- **Dependencies**: JWT, hashing.
++- **Public APIs**: `SecurityService`, `require_authentication`, `require_permissions`, `UserRecord`, `APIKeyManager`, `AuditLogger`.
++- **Future plans**: Persistent user store.
++
++### `app/services`
++
++- **Purpose**: Shared services (e.g., `TelegramService`).
++- **Dependencies**: Various.
++- **Public APIs**: Service classes.
++- **Future plans**: Consolidation.
++
++### `app/session`
++
++- **Purpose**: Session engine.
++- **Dependencies**: Telethon, repository.
++- **Public APIs**: `SessionManager`, `SessionRepository`, `SessionCache`, `SessionRecord`, `SessionState`.
++- **Future plans**: Multi-tenant sessions.
++
++### `app/telegram`
++
++- **Purpose**: Telegram engine — client pool, dialogs, messages, dispatcher, media.
++- **Dependencies**: Telethon, `app.pipeline`, `app.events`, `app.media`.
++- **Public APIs**: `TelegramEngine`, `TelegramClientPool`, `TelegramDialogService`, `TelegramMessageService`, `TelegramEntityResolver`, `TelegramEventDispatcher`, `TelegramMediaService`.
++- **Future plans**: More media types.
++
++### `app/utils`
++
++- **Purpose**: Shared utilities.
++- **Dependencies**: None.
++- **Public APIs**: Utility functions.
++- **Future plans**: Consolidation.
++
++### `app/workers`
++
++- **Purpose**: Background workers.
++- **Dependencies**: Various.
++- **Public APIs**: Worker classes.
++- **Future plans**: Worker pool.
++
++## Plugin Modules (`plugins/`)
++
++### `plugins/gowa`
++
++- **Purpose**: GoWA connector plugin.
++- **Dependencies**: `app.gowa`, `app.media`.
++- **Public APIs**: `GoWAConfig`.
++- **Future plans**: Full GoWA integration.
++
++### `plugins/n8n`
++
++- **Purpose**: n8n connector plugin.
++- **Dependencies**: FastAPI.
++- **Public APIs**: `router`, `connector`, `require_n8n_auth`.
++- **Future plans**: More n8n actions.
++
++## Frontend (`dashboard/`)
++
++- **Purpose**: React + TypeScript dashboard.
++- **Dependencies**: React, Vite.
++- **Public APIs**: Dashboard UI.
++- **Future plans**: Real-time charts.
++
++## Tests (`tests/`)
++
++- **Purpose**: Test suite.
++- **Dependencies**: pytest.
++- **Public APIs**: Fixtures.
++- **Future plans**: Integration tests.
++
++---
++
++## Related Documents
++
++- [architecture.md](architecture.md) — System architecture.
++- [context/](context/) — Per-subsystem deep dives.
++- [roadmap.md](roadmap.md) — Future plans.
+\ No newline at end of file
+diff --git a/.ai/project.md b/.ai/project.md
+new file mode 100644
+index 0000000..e4aebfa
+--- /dev/null
++++ b/.ai/project.md
+@@ -0,0 +1,60 @@
++# BerTele2 Project
++
++## Vision
++
++BerTele2 is a **self-hosted Telegram MTProto gateway** that connects Telegram to external automation platforms (n8n, GoWA, and future connectors). It provides a unified API, media pipeline, event bus, plugin SDK, and dashboard so that developers can build messaging automation without managing raw MTProto complexity.
++
++## Mission
++
++Provide a reliable, extensible, and observable bridge between Telegram and the automation ecosystem, with a clean architecture that any AI agent or human developer can extend safely.
++
++## Goals
++
++- **Unified API**: Expose Telegram capabilities (sessions, dialogs, messages, media) through a consistent REST + WebSocket API.
++- **Media Pipeline**: Process media (download, validate, hash, detect MIME, store) through a pluggable pipeline.
++- **Event-Driven**: Decouple subsystems via an internal event bus.
++- **Plugin SDK**: Allow third-party connectors and automations via a stable plugin interface.
++- **Observability**: Provide dashboard overview, logs, and metrics.
++- **Security**: JWT + API key authentication, role-based permissions, audit logging.
++- **AI-Friendly**: Document everything so any AI agent can contribute safely.
++
++## Target Users
++
++- Developers building Telegram-based automation.
++- Teams integrating Telegram with n8n, GoWA, or custom connectors.
++- Self-hosters who want a private messaging gateway.
++- AI coding agents that extend the codebase.
++
++## Supported Platforms
++
++- **Runtime**: Python 3.11+ (FastAPI, Telethon, Pydantic v2).
++- **Database**: SQLAlchemy + Alembic (SQLite for dev, PostgreSQL for production).
++- **Frontend**: React + TypeScript dashboard (Vite).
++- **Deployment**: Docker / docker-compose.
++
++## Long-Term Roadmap
++
++See [roadmap.md](roadmap.md) for milestones, epics, and release targets.
++
++## Project Philosophy
++
++1. **One Epic = One Responsibility.** Keep changes focused.
++2. **Backward Compatibility.** Never break public APIs without a deprecation cycle.
++3. **Interfaces Over Implementations.** Depend on abstractions.
++4. **Composition Over Inheritance.** Prefer small composable units.
++5. **Dependency Injection.** Wire dependencies explicitly; avoid global state.
++6. **No Duplicated Logic.** Reuse shared services and utilities.
++7. **No Circular Imports.** Keep module boundaries clean.
++8. **Documented by Default.** Code, architecture, and decisions are documented.
++9. **Tested by Default.** Every behavior has a test.
++10. **AI-Friendly.** The AI SDK is the authoritative reference for development.
++
++---
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview and index.
++- [architecture.md](architecture.md) — System architecture.
++- [roadmap.md](roadmap.md) — Milestones and epics.
++- [glossary.md](glossary.md) — Terminology.
++- [decisions/ADR-0001-project-vision.md](decisions/ADR-0001-project-vision.md) — Vision decision record.
+\ No newline at end of file
+diff --git a/.ai/prompts/bugfix-template.md b/.ai/prompts/bugfix-template.md
+new file mode 100644
+index 0000000..6cd7d45
+--- /dev/null
++++ b/.ai/prompts/bugfix-template.md
+@@ -0,0 +1,56 @@
++# Prompt Template: Bugfix
++
++Use this template to prompt an AI agent to fix a bug.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project.
++
++### Task
++
++Fix the following bug: **{{BUG_DESCRIPTION}}**
++
++### Bug Details
++
++- **Observed behavior**: {{OBSERVED_BEHAVIOR}}
++- **Expected behavior**: {{EXPECTED_BEHAVIOR}}
++- **Steps to reproduce**: {{REPRO_STEPS}}
++- **Affected module(s)**: {{AFFECTED_MODULES}}
++
++### Instructions
++
++1. Read `.ai/README.md` and `.ai/agent-template.md` first.
++2. Read the relevant `.ai/context/` files for the affected modules.
++3. Reproduce the bug with a failing test.
++4. Fix the bug with minimal, focused changes (no unrelated refactoring).
++5. Ensure the new test passes and the full suite passes (`pytest`).
++6. Update documentation (including the AI SDK) if behavior changed.
++7. Commit with a conventional commit message (`fix(...)`).
++8. Generate a patch: `git diff HEAD~1 HEAD > patches/fix-{{BUG_ID}}.patch`.
++
++### Report
++
++Report: root cause, fix description, tests added, files changed, commit message, and patch path.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{BUG_ID}}` | Bug identifier. |
++| `{{BUG_DESCRIPTION}}` | Short bug description. |
++| `{{OBSERVED_BEHAVIOR}}` | What happens currently. |
++| `{{EXPECTED_BEHAVIOR}}` | What should happen. |
++| `{{REPRO_STEPS}}` | Steps to reproduce. |
++| `{{AFFECTED_MODULES}}` | Affected modules. |
++
++---
++
++## Related Documents
++
++- [agent-template.md](../agent-template.md) — AI agent prompt template.
++- [testing.md](../testing.md) — Testing strategy.
++- [git-workflow.md](../git-workflow.md) — Commit conventions.
+\ No newline at end of file
+diff --git a/.ai/prompts/documentation-template.md b/.ai/prompts/documentation-template.md
+new file mode 100644
+index 0000000..1847805
+--- /dev/null
++++ b/.ai/prompts/documentation-template.md
+@@ -0,0 +1,52 @@
++# Prompt Template: Documentation
++
++Use this template to prompt an AI agent to write or update documentation.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project.
++
++### Task
++
++Write/update documentation for: **{{DOC_TOPIC}}**
++
++### Documentation Details
++
++- **Topic**: {{DOC_TOPIC}}
++- **Type**: {{DOC_TYPE}} (e.g., context file, ADR, module map, release notes)
++- **Target file(s)**: {{TARGET_FILES}}
++
++### Instructions
++
++1. Read `.ai/README.md` for the documentation index.
++2. Read the relevant `.ai/context/` files and source code for accuracy.
++3. Follow the structure of existing docs in the same category.
++4. Use Markdown with proper headings.
++5. Use Mermaid diagrams where appropriate.
++6. Cross-reference related documents.
++7. Avoid duplicating information already documented elsewhere.
++8. Keep the documentation accurate and up to date.
++
++### Report
++
++Report: summary, files written/updated, and any cross-references added.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{DOC_TOPIC}}` | The topic to document. |
++| `{{DOC_TYPE}}` | Type of documentation. |
++| `{{TARGET_FILES}}` | Files to write/update. |
++
++---
++
++## Related Documents
++
++- [README.md](../README.md) — Documentation index.
++- [glossary.md](../glossary.md) — Terminology.
++- [architecture.md](../architecture.md) — System architecture.
+\ No newline at end of file
+diff --git a/.ai/prompts/epic-template.md b/.ai/prompts/epic-template.md
+new file mode 100644
+index 0000000..b98a925
+--- /dev/null
++++ b/.ai/prompts/epic-template.md
+@@ -0,0 +1,51 @@
++# Prompt Template: Epic
++
++Use this template to prompt an AI agent to implement an Epic.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project.
++
++### Task
++
++Implement the following Epic: **{{EPIC_TITLE}}**
++
++### Epic Description
++
++{{EPIC_DESCRIPTION}}
++
++### Instructions
++
++1. Read `.ai/README.md` and `.ai/agent-template.md` first.
++2. Read `.ai/project.md`, `.ai/architecture.md`, and `.ai/development-rules.md`.
++3. Read the relevant `.ai/context/` files for the subsystems involved.
++4. Follow `.ai/coding-standards.md` and `.ai/testing.md`.
++5. Implement the Epic with focused changes only (no unrelated refactoring).
++6. Add tests for all new behavior.
++7. Update documentation (including the AI SDK) as needed.
++8. Commit with a conventional commit message.
++9. Generate a patch: `git diff HEAD~1 HEAD > patches/epic-{{EPIC_ID}}.patch`.
++
++### Report
++
++Report: summary, files changed, tests, documentation, commit message, and patch path.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{EPIC_ID}}` | Epic identifier. |
++| `{{EPIC_TITLE}}` | Epic title. |
++| `{{EPIC_DESCRIPTION}}` | Detailed Epic description. |
++
++---
++
++## Related Documents
++
++- [agent-template.md](../agent-template.md) — AI agent prompt template.
++- [epic-template.md](../epic-template.md) — Epic structure template.
++- [workflow.md](../workflow.md) — Development workflow.
+\ No newline at end of file
+diff --git a/.ai/prompts/refactor-template.md b/.ai/prompts/refactor-template.md
+new file mode 100644
+index 0000000..29dfafa
+--- /dev/null
++++ b/.ai/prompts/refactor-template.md
+@@ -0,0 +1,55 @@
++# Prompt Template: Refactor
++
++Use this template to prompt an AI agent to refactor code.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project.
++
++### Task
++
++Refactor the following: **{{REFACTOR_DESCRIPTION}}**
++
++### Refactor Details
++
++- **Target module(s)**: {{TARGET_MODULES}}
++- **Goal**: {{REFACTOR_GOAL}}
++- **Constraints**: {{CONSTRAINTS}}
++
++### Instructions
++
++1. Read `.ai/README.md` and `.ai/agent-template.md` first.
++2. Read the relevant `.ai/context/` files for the target modules.
++3. Preserve **public behavior** — no breaking changes.
++4. Keep changes focused on the refactor goal (no unrelated changes).
++5. Ensure all existing tests pass (`pytest`).
++6. Add tests if new behavior is introduced.
++7. Update documentation (including the AI SDK) as needed.
++8. Commit with a conventional commit message (`refactor(...)`).
++9. Generate a patch: `git diff HEAD~1 HEAD > patches/refactor-{{REFACTOR_ID}}.patch`.
++
++### Report
++
++Report: summary, files changed, tests, documentation, commit message, and patch path.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{REFACTOR_ID}}` | Refactor identifier. |
++| `{{REFACTOR_DESCRIPTION}}` | Short refactor description. |
++| `{{TARGET_MODULES}}` | Modules to refactor. |
++| `{{REFACTOR_GOAL}}` | The goal of the refactor. |
++| `{{CONSTRAINTS}}` | Any constraints (e.g., no API changes). |
++
++---
++
++## Related Documents
++
++- [agent-template.md](../agent-template.md) — AI agent prompt template.
++- [development-rules.md](../development-rules.md) — Mandatory rules.
++- [testing.md](../testing.md) — Testing strategy.
+\ No newline at end of file
+diff --git a/.ai/prompts/release-template.md b/.ai/prompts/release-template.md
+new file mode 100644
+index 0000000..22db9ce
+--- /dev/null
++++ b/.ai/prompts/release-template.md
+@@ -0,0 +1,53 @@
++# Prompt Template: Release
++
++Use this template to prompt an AI agent to prepare a release.
++
++---
++
++## Prompt
++
++You are an AI coding agent working on the **BerTele2** project.
++
++### Task
++
++Prepare a release for version **{{VERSION}}**.
++
++### Release Details
++
++- **Version**: {{VERSION}}
++- **Milestone**: {{MILESTONE}}
++- **Included Epics**: {{EPICS}}
++
++### Instructions
++
++1. Read `.ai/release.md` for the release process.
++2. Read `.ai/roadmap.md` for milestone details.
++3. Verify all Epics in the milestone are complete.
++4. Run the full test suite (`pytest`) and confirm it passes.
++5. Update `CHANGELOG.md` with release notes.
++6. Bump the version in `pyproject.toml`.
++7. Verify migration scripts are generated and reviewed.
++8. Create a release branch and tag.
++9. Write release notes.
++
++### Report
++
++Report: version, milestone, tests result, CHANGELOG summary, tag, and release notes.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{VERSION}}` | Version to release (e.g., 0.1.0). |
++| `{{MILESTONE}}` | Milestone name. |
++| `{{EPICS}}` | List of included Epics. |
++
++---
++
++## Related Documents
++
++- [release.md](../release.md) — Release process.
++- [roadmap.md](../roadmap.md) — Milestones and epics.
++- [git-workflow.md](../git-workflow.md) — Versioning and branching.
+\ No newline at end of file
+diff --git a/.ai/prompts/review-template.md b/.ai/prompts/review-template.md
+new file mode 100644
+index 0000000..64cc9a0
+--- /dev/null
++++ b/.ai/prompts/review-template.md
+@@ -0,0 +1,48 @@
++# Prompt Template: Review
++
++Use this template to prompt an AI agent to review code changes.
++
++---
++
++## Prompt
++
++You are an AI coding agent reviewing changes on the **BerTele2** project.
++
++### Task
++
++Review the following changes: **{{CHANGE_DESCRIPTION}}**
++
++### Review Instructions
++
++1. Read `.ai/review-checklist.md` for the full checklist.
++2. Read `.ai/development-rules.md` and `.ai/coding-standards.md`.
++3. Review the changes against the checklist:
++   - Architecture (scope, interfaces, DI, no circular imports, no duplication).
++   - SOLID principles.
++   - Testing (unit tests, error paths, full suite).
++   - Documentation (docstrings, AI SDK, ADRs, CHANGELOG).
++   - Performance (no blocking I/O, no unbounded memory).
++   - Security (no secrets, input validation, auth).
++   - Maintainability (readability, naming, no dead code).
++4. Report findings as: **Pass**, **Warn**, or **Fail** for each category.
++5. Provide specific, actionable feedback.
++
++### Report
++
++Report: summary, per-category verdicts, and a list of required changes.
++
++---
++
++## Placeholders
++
++| Placeholder | Description |
++| --- | --- |
++| `{{CHANGE_DESCRIPTION}}` | Description of the changes to review. |
++
++---
++
++## Related Documents
++
++- [review-checklist.md](../review-checklist.md) — Review checklist.
++- [development-rules.md](../development-rules.md) — Mandatory rules.
++- [coding-standards.md](../coding-standards.md) — Style and conventions.
+\ No newline at end of file
+diff --git a/.ai/release.md b/.ai/release.md
+new file mode 100644
+index 0000000..4529ab7
+--- /dev/null
++++ b/.ai/release.md
+@@ -0,0 +1,54 @@
++# BerTele2 Release Process
++
++This document defines the release process for BerTele2.
++
++## Versioning
++
++Follow **Semantic Versioning** (MAJOR.MINOR.PATCH):
++
++- **MAJOR** — breaking changes.
++- **MINOR** — backward-compatible features.
++- **PATCH** — backward-compatible bug fixes.
++
++See [git-workflow.md](git-workflow.md) for versioning conventions.
++
++## Milestones
++
++Releases are tied to milestones defined in [roadmap.md](roadmap.md). Each milestone groups one or more Epics.
++
++## Release Checklist
++
++- [ ] All Epics in the milestone are complete.
++- [ ] All tests pass (`pytest`).
++- [ ] Coverage expectations are met.
++- [ ] Documentation (including AI SDK) is updated.
++- [ ] CHANGELOG.md is updated.
++- [ ] Version is bumped in `pyproject.toml`.
++- [ ] Migration scripts are generated and reviewed.
++- [ ] Release branch is created and tagged.
++- [ ] Release notes are written.
++
++## Rollback
++
++- Keep the previous release tag available.
++- If a release is broken, revert to the previous tag.
++- Document the rollback reason in the CHANGELOG.
++
++## Release Flow
++
++```mermaid
++flowchart LR
++    Milestone[Milestone Complete] --> Tests[All Tests Pass]
++    Tests --> Docs[Documentation Updated]
++    Docs --> Version[Version Bumped]
++    Version --> Tag[Tagged]
++    Tag --> Notes[Release Notes]
++```
++
++---
++
++## Related Documents
++
++- [roadmap.md](roadmap.md) — Milestones and epics.
++- [git-workflow.md](git-workflow.md) — Versioning and branching.
++- [workflow.md](workflow.md) — Development workflow.
+\ No newline at end of file
+diff --git a/.ai/review-checklist.md b/.ai/review-checklist.md
+new file mode 100644
+index 0000000..0ef0e79
+--- /dev/null
++++ b/.ai/review-checklist.md
+@@ -0,0 +1,64 @@
++# BerTele2 Code Review Checklist
++
++Use this checklist when reviewing any code change on BerTele2.
++
++## Architecture
++
++- [ ] Change matches the Epic scope (no unrelated refactoring).
++- [ ] Follows the architecture in [architecture.md](architecture.md).
++- [ ] Uses interfaces and dependency injection.
++- [ ] Keeps modules independent (no circular imports).
++- [ ] No duplicated logic.
++
++## SOLID
++
++- [ ] **S**ingle Responsibility: each class/function has one job.
++- [ ] **O**pen/Closed: extension without modification.
++- [ ] **L**iskov: subclasses are substitutable.
++- [ ] **I**nterface Segregation: small, focused interfaces.
++- [ ] **D**ependency Inversion: depend on abstractions.
++
++## Testing
++
++- [ ] New behavior has unit tests.
++- [ ] Tests are isolated and deterministic.
++- [ ] Error paths and edge cases are covered.
++- [ ] Full suite passes (`pytest`).
++- [ ] Coverage expectations are met.
++
++## Documentation
++
++- [ ] Docstrings are accurate (Google style).
++- [ ] AI SDK and relevant docs are updated.
++- [ ] ADR added for significant decisions.
++- [ ] CHANGELOG updated if behavior changed.
++
++## Performance
++
++- [ ] No obvious performance regressions.
++- [ ] No blocking I/O in async paths.
++- [ ] No unbounded memory growth.
++
++## Security
++
++- [ ] No secrets in code or logs.
++- [ ] Input is validated.
++- [ ] Authentication/authorization is enforced where needed.
++- [ ] No SQL injection or unsafe deserialization.
++
++## Maintainability
++
++- [ ] Code is readable and well-named.
++- [ ] Functions are small and focused.
++- [ ] No dead code or unused imports.
++- [ ] Follows [coding-standards.md](coding-standards.md).
++- [ ] Follows [development-rules.md](development-rules.md).
++
++---
++
++## Related Documents
++
++- [development-rules.md](development-rules.md) — Mandatory rules.
++- [coding-standards.md](coding-standards.md) — Style and conventions.
++- [testing.md](testing.md) — Testing strategy.
++- [prompts/review-template.md](prompts/review-template.md) — Review prompt template.
+\ No newline at end of file
+diff --git a/.ai/roadmap.md b/.ai/roadmap.md
+new file mode 100644
+index 0000000..df6f060
+--- /dev/null
++++ b/.ai/roadmap.md
+@@ -0,0 +1,71 @@
++# BerTele2 Roadmap
++
++This document tracks milestones, epics, releases, and technical debt.
++
++## Milestones
++
++| Milestone | Status | Description |
++| --- | --- | --- |
++| M1 — Core Gateway | ✅ Complete | Session engine, Telegram engine, API, security |
++| M2 — Media Pipeline | ✅ Complete | Media engine, storage providers, pipeline steps |
++| M3 — Connectors | ✅ Complete | GoWA and n8n connectors |
++| M4 — Dashboard | ✅ Complete | Overview, logs, metrics, WebSocket |
++| M5 — AI SDK | 🚧 In Progress | This Epic (A0) |
++| M6 — Automation Engine | 🔜 Planned | Workflow triggers, actions, conditions, scheduler |
++
++## Epics
++
++### Completed Epics
++
++| Epic | Description | Patch |
++| --- | --- | --- |
++| Epic 14 | Core gateway foundation | `epic14.patch` |
++| Epic 15 | Session management | `epic-15.patch` |
++| Epic 16 | Telegram engine | `epic-16.patch` |
++| Epic 17 | Media pipeline | `patches/epic-17.patch` |
++| Epic 18 | Storage providers | `patches/epic-18.patch` |
++| Epic 19 | GoWA media + connectors | `patches/epic-19.patch`, `patches/epic-19R.patch` |
++
++### Current Epic
++
++| Epic | Description | Status |
++| --- | --- | --- |
++| Epic A0 | AI Development Kit (AI SDK) | 🚧 In Progress |
++
++### Future Epics
++
++| Epic | Description |
++| --- | --- |
++| Epic A1 | Automation Engine — triggers and actions |
++| Epic A2 | Automation Engine — scheduler and workflows |
++| Epic A3 | Additional storage providers (S3, GCS) |
++| Epic A4 | Worker pool for background tasks |
++| Epic A5 | Multi-tenant isolation |
++| Epic A6 | Additional connectors |
++
++## Release Targets
++
++| Version | Target | Contents |
++| --- | --- | --- |
++| 0.1.0 | Next | AI SDK, automation engine foundation |
++| 0.2.0 | Later | Storage providers, worker pool |
++| 1.0.0 | Future | Stable public API, multi-tenant |
++
++## Technical Debt Backlog
++
++- [ ] Replace in-memory user store with a persistent repository.
++- [ ] Add integration tests for the full media pipeline.
++- [ ] Add S3/GCS storage providers.
++- [ ] Add rate limiting and concurrency controls to the automation engine.
++- [ ] Add structured logging configuration for production.
++- [ ] Add metrics collection for the dashboard (real data, not stubs).
++- [ ] Add migration coverage for all models.
++
++---
++
++## Related Documents
++
++- [project.md](project.md) — Vision and goals.
++- [architecture.md](architecture.md) — System architecture.
++- [release.md](release.md) — Release process.
++- [module-map.md](module-map.md) — Module details.
+\ No newline at end of file
+diff --git a/.ai/testing.md b/.ai/testing.md
+new file mode 100644
+index 0000000..7734fbe
+--- /dev/null
++++ b/.ai/testing.md
+@@ -0,0 +1,73 @@
++# BerTele2 Testing Strategy
++
++This document defines the testing strategy for BerTele2.
++
++## Overview
++
++```mermaid
++flowchart LR
++    Unit[Unit Tests] --> Integration[Integration Tests]
++    Integration --> Regression[Regression Tests]
++    Regression --> CI[CI Pipeline]
++```
++
++## Unit Tests
++
++- Test individual functions, classes, and services in isolation.
++- Mock external dependencies (Telethon, HTTP, storage).
++- Fast and deterministic.
++- Located under `tests/<subsystem>/`.
++
++## Integration Tests
++
++- Test interactions between subsystems (e.g., pipeline + event bus).
++- Use real in-memory implementations where possible.
++- Verify end-to-end behavior.
++
++## Regression Tests
++
++- Re-run the full suite on every change.
++- Add a regression test for every bug fix.
++- Ensure previously fixed issues do not reappear.
++
++## Mocking
++
++- Use `unittest.mock` or `pytest-mock`.
++- Mock at the **boundary** (external I/O), not internal logic.
++- Prefer dependency injection over monkeypatching.
++
++## Coverage Expectations
++
++- Aim for **high coverage** of public behavior.
++- Cover error paths and edge cases.
++- Use `pytest --cov` to measure coverage.
++- New code should not reduce overall coverage.
++
++## Running Tests
++
++```bash
++pytest
++```
++
++Run a single subsystem:
++
++```bash
++pytest tests/media
++```
++
++## Test Conventions
++
++- Name test files `test_<module>.py`.
++- Name test functions `test_<behavior>`.
++- Use fixtures for shared setup.
++- Keep tests independent and isolated.
++
++See [coding-standards.md](coding-standards.md) for testing conventions.
++
++---
++
++## Related Documents
++
++- [coding-standards.md](coding-standards.md) — Testing conventions.
++- [review-checklist.md](review-checklist.md) — Review checklist.
++- [workflow.md](workflow.md) — Development workflow.
+\ No newline at end of file
+diff --git a/.ai/workflow.md b/.ai/workflow.md
+new file mode 100644
+index 0000000..ece9d8b
+--- /dev/null
++++ b/.ai/workflow.md
+@@ -0,0 +1,79 @@
++# BerTele2 Development Workflow
++
++This document describes the end-to-end development workflow for BerTele2.
++
++## Overview
++
++```mermaid
++flowchart LR
++    Design[Design] --> Implementation[Implementation]
++    Implementation --> Testing[Testing]
++    Testing --> Review[Review]
++    Review --> Commit[Commit]
++    Commit --> Patch[Patch]
++    Patch --> Push[Push]
++    Push --> Release[Release]
++```
++
++## 1. Design
++
++- Read [project.md](project.md), [architecture.md](architecture.md), and [roadmap.md](roadmap.md).
++- Define the Epic scope using [epic-template.md](epic-template.md).
++- Identify affected modules in [module-map.md](module-map.md).
++- Consider whether an ADR is needed for significant decisions.
++
++## 2. Implementation
++
++- Follow [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md).
++- Implement one focused change at a time.
++- Use dependency injection and interfaces.
++- Keep modules independent.
++
++## 3. Testing
++
++- Write unit tests for new behavior. See [testing.md](testing.md).
++- Run the full test suite before finishing.
++- Ensure coverage expectations are met.
++
++## 4. Review
++
++- Self-review against [review-checklist.md](review-checklist.md).
++- Verify no unrelated refactoring.
++- Confirm documentation is updated.
++
++## 5. Commit
++
++- Follow [git-workflow.md](git-workflow.md) for commit style.
++- Use a clear, conventional commit message.
++
++## 6. Patch
++
++- Generate a patch:
++
++```bash
++mkdir -p patches
++git diff HEAD~1 HEAD > patches/epic-<id>.patch
++```
++
++- Verify the patch applies cleanly.
++
++## 7. Push
++
++- Push the branch:
++
++```bash
++git push origin $(git branch --show-current)
++```
++
++## 8. Release
++
++- Follow [release.md](release.md) for versioning and release checklist.
++
++---
++
++## Related Documents
++
++- [git-workflow.md](git-workflow.md) — Branching and commits.
++- [testing.md](testing.md) — Testing strategy.
++- [release.md](release.md) — Release process.
++- [review-checklist.md](review-checklist.md) — Review checklist.
+\ No newline at end of file

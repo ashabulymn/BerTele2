@@ -1,0 +1,1273 @@
+diff --git a/.env.example b/.env.example
+index 64fbfe7..8d66f0a 100644
+--- a/.env.example
++++ b/.env.example
+@@ -18,4 +18,7 @@ GOWA_MAX_RETRIES=3
+ GOWA_BACKOFF_FACTOR=1.5
+ GOWA_MAX_BACKOFF=30.0
+ GOWA_USE_MOCK_TRANSPORT=true
++GOWA_MAX_UPLOAD_SIZE=52428800
++GOWA_UPLOAD_TIMEOUT=30.0
++GOWA_RETRY_COUNT=3
+ 
+diff --git a/app/api/v1/endpoints/gowa_media.py b/app/api/v1/endpoints/gowa_media.py
+new file mode 100644
+index 0000000..d2ed7cf
+--- /dev/null
++++ b/app/api/v1/endpoints/gowa_media.py
+@@ -0,0 +1,100 @@
++from __future__ import annotations
++
++from typing import Any
++
++from fastapi import APIRouter, HTTPException, status
++from pydantic import BaseModel
++
++from app.gowa.media.exceptions import GoWAUnsupportedMedia, GoWAValidationError
++from app.gowa.media.service import GoWAMediaService
++from app.media.pipeline.interfaces import MediaResource
++
++router = APIRouter()
++service = GoWAMediaService()
++
++
++class SendMediaRequest(BaseModel):
++    """Request model for sending media via GoWA."""
++
++    media_id: str
++    recipient: str
++
++
++class SendMediaResponse(BaseModel):
++    """Response model for media send operations."""
++
++    status: str
++    media_id: str
++    recipient: str
++    message_id: str | None = None
++    provider: str
++    metadata: dict[str, Any] | None = None
++
++
++class CapabilitiesResponse(BaseModel):
++    """Response model for GoWA media capabilities."""
++
++    supported_types: list[str]
++    max_upload_size: int | None = None
++    features: dict[str, bool]
++
++
++@router.post("/gowa/media/send", response_model=SendMediaResponse)
++async def send_media(payload: SendMediaRequest) -> SendMediaResponse:
++    """Send a media resource to a WhatsApp recipient via GoWA.
++
++    The media must have been previously processed by the Media Pipeline
++    and assigned a media_id.
++    """
++    try:
++        # In a real implementation, we would fetch the MediaResource from storage
++        # using the media_id. For now, we'll create a mock resource.
++        resource = _get_media_resource(payload.media_id)
++        result = await service.send_media(resource, payload.recipient)
++        return SendMediaResponse(**result)
++
++    except GoWAValidationError as exc:
++        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
++    except GoWAUnsupportedMedia as exc:
++        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
++    except Exception as exc:
++        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to send media: {exc}") from exc
++
++
++@router.get("/gowa/media/capabilities", response_model=CapabilitiesResponse)
++async def get_capabilities() -> CapabilitiesResponse:
++    """Return GoWA media sending capabilities."""
++    return CapabilitiesResponse(
++        supported_types=["photo", "video", "audio", "voice", "sticker", "document"],
++        max_upload_size=None,  # Would be configured from GoWA config
++        features={
++            "caption": True,
++            "thumbnail": True,
++            "voice_note": True,
++            "sticker": True,
++            "document": True,
++        },
++    )
++
++
++def _get_media_resource(media_id: str) -> MediaResource:
++    """Retrieve a MediaResource by its ID.
++
++    This is a placeholder implementation. In production, this would
++    fetch the resource from the media storage system.
++
++    Args:
++        media_id: The media identifier.
++
++    Returns:
++        The MediaResource object.
++
++    Raises:
++        HTTPException: If the media resource is not found.
++    """
++    # Placeholder: In production, fetch from storage
++    # For now, raise an error to indicate this needs implementation
++    raise HTTPException(
++        status.HTTP_501_NOT_IMPLEMENTED,
++        detail="Media resource retrieval not yet implemented. Use the media pipeline to process media first.",
++    )
+\ No newline at end of file
+diff --git a/app/api/v1/router.py b/app/api/v1/router.py
+index 68ec56a..9203703 100644
+--- a/app/api/v1/router.py
++++ b/app/api/v1/router.py
+@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
+     apikeys,
+     auth,
+     dialogs,
++    gowa_media,
+     health,
+     messages,
+     meta,
+@@ -30,3 +31,4 @@ router.include_router(sessions.router, tags=["sessions"])
+ router.include_router(webhooks.router, tags=["webhooks"])
+ router.include_router(media_router, tags=["media"])
+ router.include_router(telegram_media_router, tags=["telegram-media"])
++router.include_router(gowa_media.router, tags=["gowa-media"])
+diff --git a/app/gowa/media/__init__.py b/app/gowa/media/__init__.py
+new file mode 100644
+index 0000000..2476728
+--- /dev/null
++++ b/app/gowa/media/__init__.py
+@@ -0,0 +1,16 @@
++from __future__ import annotations
++
++from .exceptions import GoWAMediaError, GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
++from .mapper import map_media_resource_to_gowa_payload
++from .sender import GoWAMediaSender
++from .service import GoWAMediaService
++
++__all__ = [
++    "GoWAMediaError",
++    "GoWAMediaSendError",
++    "GoWAUnsupportedMedia",
++    "GoWAValidationError",
++    "GoWAMediaSender",
++    "GoWAMediaService",
++    "map_media_resource_to_gowa_payload",
++]
+\ No newline at end of file
+diff --git a/app/gowa/media/exceptions.py b/app/gowa/media/exceptions.py
+new file mode 100644
+index 0000000..249395d
+--- /dev/null
++++ b/app/gowa/media/exceptions.py
+@@ -0,0 +1,17 @@
++from __future__ import annotations
++
++
++class GoWAMediaError(Exception):
++    """Base exception for GoWA media sender failures."""
++
++
++class GoWAValidationError(GoWAMediaError):
++    """Raised when media resource validation fails."""
++
++
++class GoWAUnsupportedMedia(GoWAMediaError):
++    """Raised when a media type is not supported by GoWA."""
++
++
++class GoWAMediaSendError(GoWAMediaError):
++    """Raised when media sending fails."""
+\ No newline at end of file
+diff --git a/app/gowa/media/mapper.py b/app/gowa/media/mapper.py
+new file mode 100644
+index 0000000..8c40d44
+--- /dev/null
++++ b/app/gowa/media/mapper.py
+@@ -0,0 +1,92 @@
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++from app.gowa.media.exceptions import GoWAUnsupportedMedia
++from app.media.models import MediaMetadata, MediaType
++from app.media.pipeline.interfaces import MediaResource
++from plugins.gowa.models import MediaType as GoWAMediaType
++
++logger = logging.getLogger("app.gowa.media.media_mapper")
++
++
++def map_media_resource_to_gowa_payload(resource: MediaResource) -> dict[str, Any]:
++    """Map a MediaResource to a GoWA media payload.
++
++    The mapper only includes essential fields required for sending media.
++    All media processing (hash calculation, thumbnail generation, etc.)
++    should be done by the MediaPipeline before the resource reaches this point.
++
++    Args:
++        resource: The media resource from the pipeline.
++
++    Returns:
++        A dictionary suitable for sending via the GoWA connector.
++
++    Raises:
++        GoWAUnsupportedMedia: If the media type is not supported by GoWA.
++    """
++    metadata = resource.metadata
++    gowa_type = _map_media_type(metadata.type)
++
++    payload: dict[str, Any] = {
++        "type": gowa_type,
++        "to": "",  # Must be set by caller
++        "media_url": resource.storage_key,
++        "mime_type": metadata.mime_type,
++        "filename": metadata.filename,
++        "caption": metadata.caption,
++        "metadata": {
++            "media_id": metadata.id,
++            "size": metadata.size,
++            "created_at": metadata.created_at.isoformat(),
++        },
++    }
++
++    # Include optional metadata fields if they exist
++    if metadata.width and metadata.height:
++        payload["metadata"]["dimensions"] = {"width": metadata.width, "height": metadata.height}
++
++    if metadata.duration is not None:
++        payload["metadata"]["duration"] = metadata.duration
++
++    logger.debug(
++        "Mapped media resource to GoWA payload",
++        extra={
++            "media_id": metadata.id,
++            "media_type": metadata.type.value,
++            "gowa_type": gowa_type,
++            "storage_key": resource.storage_key,
++        },
++    )
++
++    return payload
++
++
++def _map_media_type(media_type: MediaType) -> GoWAMediaType:
++    """Map BerTele2 media type to GoWA media type.
++
++    Args:
++        media_type: The BerTele2 media type.
++
++    Returns:
++        The corresponding GoWA media type.
++
++    Raises:
++        GoWAUnsupportedMedia: If the media type is not supported.
++    """
++    type_mapping: dict[MediaType, GoWAMediaType] = {
++        MediaType.PHOTO: "image",
++        MediaType.VIDEO: "video",
++        MediaType.AUDIO: "audio",
++        MediaType.VOICE: "audio",
++        MediaType.STICKER: "image",
++        MediaType.ANIMATION: "video",
++        MediaType.DOCUMENT: "document",
++    }
++
++    if media_type not in type_mapping:
++        raise GoWAUnsupportedMedia(f"Unsupported media type: {media_type.value}")
++
++    return type_mapping[media_type]
+\ No newline at end of file
+diff --git a/app/gowa/media/sender.py b/app/gowa/media/sender.py
+new file mode 100644
+index 0000000..82fc816
+--- /dev/null
++++ b/app/gowa/media/sender.py
+@@ -0,0 +1,117 @@
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++from app.gowa.media.exceptions import GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
++from app.gowa.media.mapper import map_media_resource_to_gowa_payload
++from app.media.pipeline.interfaces import MediaResource
++from plugins.gowa.client import GoWAClient
++from plugins.gowa.config import GoWAConfig
++
++logger = logging.getLogger("app.gowa.media.sender")
++
++
++class GoWAMediaSender:
++    """Transport-only sender for media resources via GoWA.
++
++    This sender does not perform any media processing. It receives
++    MediaResource objects from the pipeline and sends them to WhatsApp
++    using the existing GoWA connector.
++    """
++
++    def __init__(
++        self,
++        *,
++        gowa_client: GoWAClient | None = None,
++        config: GoWAConfig | None = None,
++        logger: logging.Logger | None = None,
++    ) -> None:
++        self.gowa_client = gowa_client or GoWAClient(config=config)
++        self.config = config
++        self.logger = logger or logging.getLogger("app.gowa.media.sender")
++
++    async def send(self, resource: MediaResource, recipient: str) -> dict[str, Any]:
++        """Send a media resource to a WhatsApp recipient.
++
++        Args:
++            resource: The media resource from the pipeline.
++            recipient: The WhatsApp recipient number.
++
++        Returns:
++            A dictionary with delivery result information.
++
++        Raises:
++            GoWAValidationError: If the resource is invalid.
++            GoWAUnsupportedMedia: If the media type is not supported.
++            GoWAMediaSendError: If sending fails.
++        """
++        self._validate_resource(resource)
++
++        try:
++            payload = map_media_resource_to_gowa_payload(resource)
++            payload["to"] = recipient
++
++            self.logger.info(
++                "Sending media via GoWA",
++                extra={
++                    "media_id": resource.metadata.id,
++                    "media_type": resource.metadata.type.value,
++                    "recipient": recipient,
++                    "storage_key": resource.storage_key,
++                },
++            )
++
++            result = await self.gowa_client.send_message(payload)
++
++            self.logger.info(
++                "Media sent successfully via GoWA",
++                extra={
++                    "media_id": resource.metadata.id,
++                    "recipient": recipient,
++                    "message_id": result.get("message_id"),
++                },
++            )
++
++            return {
++                "status": "sent",
++                "media_id": resource.metadata.id,
++                "recipient": recipient,
++                "message_id": result.get("message_id"),
++                "provider": "gowa",
++                "metadata": result,
++            }
++
++        except GoWAUnsupportedMedia:
++            raise
++        except Exception as exc:
++            self.logger.error(
++                "Failed to send media via GoWA",
++                extra={
++                    "media_id": resource.metadata.id,
++                    "recipient": recipient,
++                    "error": str(exc),
++                },
++            )
++            raise GoWAMediaSendError(f"Failed to send media: {exc}") from exc
++
++    def _validate_resource(self, resource: MediaResource) -> None:
++        """Validate the media resource before sending.
++
++        Args:
++            resource: The media resource to validate.
++
++        Raises:
++            GoWAValidationError: If the resource is invalid.
++        """
++        if not resource.storage_key:
++            raise GoWAValidationError("Media resource must have a storage_key")
++
++        if not resource.ready:
++            raise GoWAValidationError("Media resource is not ready for sending")
++
++        if not resource.metadata.mime_type:
++            raise GoWAValidationError("Media resource must have a mime_type")
++
++        if resource.metadata.size < 0:
++            raise GoWAValidationError("Media resource size must be non-negative")
+\ No newline at end of file
+diff --git a/app/gowa/media/service.py b/app/gowa/media/service.py
+new file mode 100644
+index 0000000..6692ba4
+--- /dev/null
++++ b/app/gowa/media/service.py
+@@ -0,0 +1,95 @@
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++from app.gowa.media.exceptions import GoWAMediaError, GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
++from app.gowa.media.sender import GoWAMediaSender
++from app.media.pipeline.interfaces import MediaResource
++from plugins.gowa.config import GoWAConfig
++
++logger = logging.getLogger("app.gowa.media.service")
++
++
++class GoWAMediaService:
++    """Service layer for sending media via GoWA.
++
++    Responsibilities:
++    - Validate sender configuration
++    - Invoke GoWAMediaSender
++    - Handle delivery results
++    - Translate GoWA errors into BerTele2 exceptions
++    """
++
++    def __init__(
++        self,
++        *,
++        config: GoWAConfig | None = None,
++        sender: GoWAMediaSender | None = None,
++        logger: logging.Logger | None = None,
++    ) -> None:
++        self.config = config or GoWAConfig()
++        self.sender = sender or GoWAMediaSender(config=self.config)
++        self.logger = logger or logging.getLogger("app.gowa.media.service")
++
++    async def send_media(self, resource: MediaResource, recipient: str) -> dict[str, Any]:
++        """Send a media resource to a WhatsApp recipient.
++
++        Args:
++            resource: The media resource from the pipeline.
++            recipient: The WhatsApp recipient number.
++
++        Returns:
++            A dictionary with delivery result information.
++
++        Raises:
++            GoWAValidationError: If the resource or configuration is invalid.
++            GoWAUnsupportedMedia: If the media type is not supported.
++            GoWAMediaSendError: If sending fails.
++        """
++        self._validate_configuration()
++
++        try:
++            result = await self.sender.send(resource, recipient)
++            return result
++
++        except GoWAValidationError:
++            raise
++        except GoWAUnsupportedMedia:
++            raise
++        except GoWAMediaSendError:
++            raise
++        except Exception as exc:
++            self.logger.error(
++                "Unexpected error in GoWA media service",
++                extra={
++                    "media_id": resource.metadata.id,
++                    "recipient": recipient,
++                    "error": str(exc),
++                },
++            )
++            raise GoWAMediaSendError(f"Unexpected error sending media: {exc}") from exc
++
++    def _validate_configuration(self) -> None:
++        """Validate the service configuration.
++
++        Raises:
++            GoWAValidationError: If the configuration is invalid.
++        """
++        if not self.config.enabled:
++            raise GoWAValidationError("GoWA connector is not enabled")
++
++        if not self.config.base_url:
++            raise GoWAValidationError("GoWA base_url is not configured")
++
++        if self.config.max_upload_size <= 0:
++            raise GoWAValidationError("GoWA max_upload_size must be positive")
++
++        if self.config.upload_timeout <= 0:
++            raise GoWAValidationError("GoWA upload_timeout must be positive")
++
++        if self.config.retry_count < 0:
++            raise GoWAValidationError("GoWA retry_count must be non-negative")
++
++        if self.config.use_mock_transport:
++            self.logger.warning("GoWA media service is using mock transport")
+diff --git a/docs/gowa-media.md b/docs/gowa-media.md
+new file mode 100644
+index 0000000..f1523f2
+--- /dev/null
++++ b/docs/gowa-media.md
+@@ -0,0 +1,240 @@
++# GoWA Media Sender
++
++## Architecture
++
++The GoWA Media Sender is a transport-only component that integrates the Media Pipeline with the GoWA (WhatsApp) connector. It follows a clean separation of concerns:
++
++```
++Media Pipeline → MediaResource → GoWAMediaSender → GoWAClient → WhatsApp
++```
++
++### Components
++
++1. **GoWAMediaSender** (`app/gowa/media/sender.py`)
++   - Transport-only sender
++   - Receives `MediaResource` objects from the pipeline
++   - Validates resources before sending
++   - Delegates to GoWA client for actual transmission
++
++2. **GoWAMediaMapper** (`app/gowa/media/mapper.py`)
++   - Maps `MediaMetadata` to GoWA payload format
++   - Handles type conversion (BerTele2 → GoWA)
++   - Preserves metadata in payload
++
++3. **GoWAMediaService** (`app/gowa/media/service.py`)
++   - Service layer for business logic
++   - Configuration validation
++   - Error translation (GoWA → BerTele2 exceptions)
++
++## Sender Flow
++
++```
++1. Receive MediaResource from pipeline
++2. Validate resource (storage_key, ready, mime_type, size)
++3. Map MediaMetadata to GoWA payload
++4. Set recipient in payload
++5. Call GoWAClient.send_message()
++6. Return delivery result
++```
++
++### Example Flow
++
++```python
++from app.gowa.media.service import GoWAMediaService
++from app.media.pipeline.interfaces import MediaResource
++
++service = GoWAMediaService()
++
++# MediaResource comes from the pipeline
++resource: MediaResource = await pipeline.process(...)
++
++# Send to WhatsApp
++result = await service.send_media(resource, recipient="15551234567")
++# {
++#     "status": "sent",
++#     "media_id": "...",
++#     "recipient": "15551234567",
++#     "message_id": "gowa-...",
++#     "provider": "gowa",
++#     "metadata": {...}
++# }
++```
++
++## Payload Mapping
++
++### Supported Media Types
++
++| BerTele2 Type | GoWA Type | Notes |
++|--------------|-----------|-------|
++| `photo` | `image` | |
++| `video` | `video` | |
++| `audio` | `audio` | |
++| `voice` | `audio` | Mapped to audio |
++| `sticker` | `image` | Mapped to image |
++| `animation` | `video` | Mapped to video |
++| `document` | `document` | |
++
++### Payload Structure
++
++```python
++{
++    "type": "image",  # GoWA media type
++    "to": "15551234567",  # Recipient (set by sender)
++    "media_url": "photo/abc-123",  # Storage key from pipeline
++    "mime_type": "image/jpeg",
++    "filename": "photo.jpg",
++    "caption": "Optional caption",
++    "metadata": {
++        "media_id": "uuid",
++        "size": 102400,
++        "created_at": "2024-01-01T00:00:00Z",
++        # Optional fields:
++        "dimensions": {"width": 1920, "height": 1080},
++        "duration": 30.5
++    }
++}
++```
++
++## Configuration
++
++### Environment Variables
++
++| Variable | Description | Default |
++|----------|-------------|---------|
++| `GOWA_ENABLED` | Enable/disable GoWA connector | `true` |
++| `GOWA_BASE_URL` | GoWA API base URL | `http://localhost:8080` |
++| `GOWA_API_KEY` | API key for authentication | `None` |
++| `GOWA_TIMEOUT_SECONDS` | Request timeout | `15.0` |
++| `GOWA_MAX_RETRIES` | Maximum retry attempts | `3` |
++| `GOWA_BACKOFF_FACTOR` | Exponential backoff factor | `1.5` |
++| `GOWA_MAX_BACKOFF` | Maximum backoff delay | `30.0` |
++| `GOWA_USE_MOCK_TRANSPORT` | Use mock transport for testing | `true` |
++| `GOWA_MAX_UPLOAD_SIZE` | Maximum media upload size in bytes | `52428800` (50 MB) |
++| `GOWA_UPLOAD_TIMEOUT` | Media upload timeout in seconds | `30.0` |
++| `GOWA_RETRY_COUNT` | Media upload retry count | `3` |
++
++### Example Configuration
++
++```python
++from plugins.gowa.config import GoWAConfig
++
++config = GoWAConfig(
++    enabled=True,
++    base_url="https://gowa.example.com",
++    api_key="your-api-key",
++    timeout_seconds=20.0,
++    max_retries=5,
++    use_mock_transport=False,
++)
++```
++
++## API Endpoints
++
++### POST /gowa/media/send
++
++Send a media resource to a WhatsApp recipient.
++
++**Request:**
++```json
++{
++    "media_id": "uuid-of-processed-media",
++    "recipient": "15551234567"
++}
++```
++
++**Response:**
++```json
++{
++    "status": "sent",
++    "media_id": "uuid",
++    "recipient": "15551234567",
++    "message_id": "gowa-image-12345",
++    "provider": "gowa",
++    "metadata": {
++        "status": "accepted",
++        "provider": "gowa",
++        "message_id": "gowa-image-12345"
++    }
++}
++```
++
++**Error Responses:**
++- `400 Bad Request`: Invalid resource or configuration
++- `422 Unprocessable Entity`: Unsupported media type
++- `500 Internal Server Error`: Sending failed
++- `501 Not Implemented`: Media resource retrieval not yet implemented
++
++### GET /gowa/media/capabilities
++
++Return GoWA media sending capabilities.
++
++**Response:**
++```json
++{
++    "supported_types": ["photo", "video", "audio", "voice", "sticker", "document"],
++    "max_upload_size": null,
++    "features": {
++        "caption": true,
++        "voice_note": true,
++        "sticker": true,
++        "document": true
++    }
++}
++```
++
++## Future Media Bridge Integration
++
++The sender is designed to be extended for future media bridges:
++
++1. **Telegram Bridge**: Add a bridge module that converts Telegram media to MediaResource
++2. **Direct Upload**: Support direct media upload without pipeline processing
++3. **Batch Sending**: Add batch operations for multiple recipients
++4. **Media Conversion**: Integrate with FFmpeg for format conversion (out of scope for current epic)
++
++### Extension Points
++
++- Add new media types by extending `_map_media_type()` in `mapper.py`
++- Add preprocessing by extending `GoWAMediaSender.send()` before mapping
++- Add post-processing by extending after `gowa_client.send_message()`
++
++## Error Handling
++
++### Exception Hierarchy
++
++```
++GoWAMediaError (base)
++├── GoWAValidationError
++│   └── Invalid resource or configuration
++├── GoWAUnsupportedMedia
++│   └── Unsupported media type
++└── GoWAMediaSendError
++    └── Sending failed
++```
++
++### Error Translation
++
++The service layer translates GoWA errors into BerTele2 exceptions:
++
++- HTTP errors → `GoWAMediaSendError`
++- Validation errors → `GoWAValidationError`
++- Unsupported types → `GoWAUnsupportedMedia`
++
++## Testing
++
++See `tests/gowa_media/` for test coverage:
++
++- Payload mapping tests
++- Sender success/failure tests
++- Configuration validation tests
++- Service layer tests
++
++## Out of Scope
++
++The following features are explicitly out of scope for this epic:
++
++- Telegram bridge implementation
++- Media conversion/resizing
++- FFmpeg integration
++- Compression
++- Encryption
++- Retry queue (handled by GoWA client)
+\ No newline at end of file
+diff --git a/plugins/gowa/config.py b/plugins/gowa/config.py
+index daed3b9..072745c 100644
+--- a/plugins/gowa/config.py
++++ b/plugins/gowa/config.py
+@@ -20,6 +20,9 @@ class GoWAConfig(BaseSettings):
+     backoff_factor: float = Field(default=1.5, gt=0)
+     max_backoff: float = Field(default=30.0, gt=0)
+     use_mock_transport: bool = True
++    max_upload_size: int = Field(default=50 * 1024 * 1024, gt=0)
++    upload_timeout: float = Field(default=30.0, ge=1.0)
++    retry_count: int = Field(default=3, ge=0)
+ 
+     @property
+     def api_base_url(self) -> str:
+diff --git a/tests/gowa_media/__init__.py b/tests/gowa_media/__init__.py
+new file mode 100644
+index 0000000..6c43ea2
+--- /dev/null
++++ b/tests/gowa_media/__init__.py
+@@ -0,0 +1 @@
++from __future__ import annotations
+\ No newline at end of file
+diff --git a/tests/gowa_media/test_mapper.py b/tests/gowa_media/test_mapper.py
+new file mode 100644
+index 0000000..5df849f
+--- /dev/null
++++ b/tests/gowa_media/test_mapper.py
+@@ -0,0 +1,158 @@
++from __future__ import annotations
++
++from datetime import UTC, datetime
++
++import pytest
++
++from app.gowa.media.exceptions import GoWAUnsupportedMedia
++from app.gowa.media.mapper import map_media_resource_to_gowa_payload
++from app.media.models import (
++    Animation,
++    Audio,
++    Document,
++    MediaMetadata,
++    MediaType,
++    Photo,
++    Sticker,
++    Video,
++    Voice,
++)
++from app.media.pipeline.interfaces import MediaResource
++
++def _create_metadata(media_type: MediaType, **kwargs: object) -> MediaMetadata:
++    """Helper to create media metadata for testing."""
++    defaults = {
++        "type": media_type,
++        "mime_type": "image/jpeg",
++        "size": 1024,
++        "sha256": "abc123",
++        "created_at": datetime.now(UTC),
++    }
++    defaults.update(kwargs)
++    return MediaMetadata(**defaults)
++
++def _create_resource(metadata: MediaMetadata, storage_key: str = "test/key") -> MediaResource:
++    """Helper to create a MediaResource for testing."""
++    return MediaResource(metadata=metadata, storage_key=storage_key, content=b"test", ready=True)
++
++def test_map_photo_to_gowa_payload() -> None:
++    """Test mapping photo to GoWA payload."""
++    metadata = _create_metadata(MediaType.PHOTO, filename="photo.jpg", width=1920, height=1080)
++    resource = _create_resource(metadata, storage_key="photo/abc-123")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "image"
++    assert payload["to"] == ""
++    assert payload["media_url"] == "photo/abc-123"
++    assert payload["mime_type"] == "image/jpeg"
++    assert payload["filename"] == "photo.jpg"
++    assert payload["metadata"]["media_id"] == metadata.id
++    assert payload["metadata"]["size"] == 1024
++    assert payload["metadata"]["dimensions"] == {"width": 1920, "height": 1080}
++
++def test_map_video_to_gowa_payload() -> None:
++    """Test mapping video to GoWA payload."""
++    metadata = _create_metadata(MediaType.VIDEO, filename="video.mp4", duration=120.5)
++    resource = _create_resource(metadata, storage_key="video/xyz-789")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "video"
++    assert payload["media_url"] == "video/xyz-789"
++    assert payload["metadata"]["duration"] == 120.5
++
++def test_map_audio_to_gowa_payload() -> None:
++    """Test mapping audio to GoWA payload."""
++    metadata = _create_metadata(MediaType.AUDIO, filename="audio.mp3", duration=180.0)
++    resource = _create_resource(metadata, storage_key="audio/def-456")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "audio"
++    assert payload["media_url"] == "audio/def-456"
++    assert payload["metadata"]["duration"] == 180.0
++
++def test_map_voice_to_gowa_payload() -> None:
++    """Test mapping voice to GoWA payload (mapped to audio)."""
++    metadata = _create_metadata(MediaType.VOICE, mime_type="audio/ogg")
++    resource = _create_resource(metadata, storage_key="voice/voice-123")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "audio"
++    assert payload["mime_type"] == "audio/ogg"
++
++def test_map_sticker_to_gowa_payload() -> None:
++    """Test mapping sticker to GoWA payload (mapped to image)."""
++    metadata = _create_metadata(MediaType.STICKER, mime_type="image/webp")
++    resource = _create_resource(metadata, storage_key="sticker/stick-456")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "image"
++    assert payload["mime_type"] == "image/webp"
++
++def test_map_animation_to_gowa_payload() -> None:
++    """Test mapping animation to GoWA payload (mapped to video)."""
++    metadata = _create_metadata(MediaType.ANIMATION, mime_type="image/gif")
++    resource = _create_resource(metadata, storage_key="animation/gif-789")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "video"
++    assert payload["mime_type"] == "image/gif"
++
++def test_map_document_to_gowa_payload() -> None:
++    """Test mapping document to GoWA payload."""
++    metadata = _create_metadata(MediaType.DOCUMENT, filename="doc.pdf", mime_type="application/pdf")
++    resource = _create_resource(metadata, storage_key="document/doc-123")
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["type"] == "document"
++    assert payload["filename"] == "doc.pdf"
++    assert payload["mime_type"] == "application/pdf"
++
++def test_map_optional_fields_omitted_when_none() -> None:
++    """Test that optional fields are omitted when None."""
++    metadata = _create_metadata(
++        MediaType.PHOTO,
++        filename=None,
++        caption=None,
++        width=None,
++        height=None,
++        duration=None,
++    )
++    resource = _create_resource(metadata)
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert "dimensions" not in payload["metadata"]
++    assert "duration" not in payload["metadata"]
++
++def test_map_unsupported_media_type_raises() -> None:
++    """Test that unsupported media types raise an exception."""
++    # Create a metadata with an unsupported type by using a mock
++    # We'll patch the _map_media_type function to raise the exception
++    from unittest.mock import patch
++    from app.gowa.media.mapper import map_media_resource_to_gowa_payload
++
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    # Patch the _map_media_type function to raise the exception
++    with patch("app.gowa.media.mapper._map_media_type") as mock_map:
++        mock_map.side_effect = GoWAUnsupportedMedia("Unsupported media type")
++
++        with pytest.raises(GoWAUnsupportedMedia, match="Unsupported media type"):
++            map_media_resource_to_gowa_payload(resource)
++
++def test_map_includes_caption() -> None:
++    """Test that caption is included in the payload."""
++    metadata = _create_metadata(MediaType.PHOTO, caption="Test caption")
++    resource = _create_resource(metadata)
++
++    payload = map_media_resource_to_gowa_payload(resource)
++
++    assert payload["caption"] == "Test caption"
+\ No newline at end of file
+diff --git a/tests/gowa_media/test_sender.py b/tests/gowa_media/test_sender.py
+new file mode 100644
+index 0000000..4633d03
+--- /dev/null
++++ b/tests/gowa_media/test_sender.py
+@@ -0,0 +1,156 @@
++from __future__ import annotations
++
++from datetime import UTC, datetime
++from typing import Any
++from unittest.mock import AsyncMock
++
++import pytest
++
++from app.gowa.media.exceptions import GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
++from app.gowa.media.mapper import map_media_resource_to_gowa_payload
++from app.gowa.media.sender import GoWAMediaSender
++from app.media.models import MediaMetadata, MediaType
++from app.media.pipeline.interfaces import MediaResource
++from plugins.gowa.client import GoWAClient
++from plugins.gowa.config import GoWAConfig
++
++
++def _create_metadata(media_type: MediaType, **kwargs: object) -> MediaMetadata:
++    """Helper to create media metadata for testing."""
++    defaults = {
++        "type": media_type,
++        "mime_type": "image/jpeg",
++        "size": 1024,
++        "sha256": "abc123",
++        "created_at": datetime.now(UTC),
++    }
++    defaults.update(kwargs)
++    return MediaMetadata(**defaults)
++
++
++def _create_resource(metadata: MediaMetadata, storage_key: str = "test/key") -> MediaResource:
++    """Helper to create a MediaResource for testing."""
++    return MediaResource(metadata=metadata, storage_key=storage_key, content=b"test", ready=True)
++
++
++@pytest.mark.anyio
++async def test_sender_success() -> None:
++    """Test successful media sending."""
++    metadata = _create_metadata(MediaType.PHOTO, filename="photo.jpg")
++    resource = _create_resource(metadata, storage_key="photo/abc-123")
++
++    mock_client = AsyncMock(spec=GoWAClient)
++    mock_client.send_message.return_value = {
++        "status": "accepted",
++        "provider": "gowa",
++        "message_id": "gowa-image-12345",
++    }
++
++    sender = GoWAMediaSender(gowa_client=mock_client)
++    result = await sender.send(resource, recipient="15551234567")
++
++    assert result["status"] == "sent"
++    assert result["media_id"] == metadata.id
++    assert result["recipient"] == "15551234567"
++    assert result["message_id"] == "gowa-image-12345"
++    assert result["provider"] == "gowa"
++
++    # Verify the payload sent to GoWA client
++    call_args = mock_client.send_message.call_args
++    payload = call_args[0][0] if call_args[0] else call_args[1]["payload"]
++    assert payload["to"] == "15551234567"
++    assert payload["type"] == "image"
++    assert payload["media_url"] == "photo/abc-123"
++
++
++@pytest.mark.anyio
++async def test_sender_validation_error() -> None:
++    """Test sender validation errors."""
++    # Missing storage_key
++    resource = MediaResource(
++        metadata=_create_metadata(MediaType.PHOTO),
++        storage_key="",
++        content=b"test",
++        ready=True,
++    )
++
++    sender = GoWAMediaSender()
++    with pytest.raises(GoWAValidationError, match="storage_key"):
++        await sender.send(resource, recipient="15551234567")
++
++    # Not ready
++    resource = MediaResource(
++        metadata=_create_metadata(MediaType.PHOTO),
++        storage_key="photo/abc-123",
++        content=b"test",
++        ready=False,
++    )
++
++    with pytest.raises(GoWAValidationError, match="not ready"):
++        await sender.send(resource, recipient="15551234567")
++
++    # Missing mime_type
++    metadata = _create_metadata(MediaType.PHOTO)
++    metadata.mime_type = ""  # type: ignore[assignment]
++    resource = MediaResource(
++        metadata=metadata,
++        storage_key="photo/abc-123",
++        content=b"test",
++        ready=True,
++    )
++
++    with pytest.raises(GoWAValidationError, match="mime_type"):
++        await sender.send(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_sender_unsupported_media_type() -> None:
++    """Test sender with unsupported media type."""
++    from unittest.mock import patch
++
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    sender = GoWAMediaSender()
++
++    # Patch the map_media_resource_to_gowa_payload function to raise the exception
++    with patch("app.gowa.media.sender.map_media_resource_to_gowa_payload") as mock_map:
++        mock_map.side_effect = GoWAUnsupportedMedia("Unsupported media type")
++
++        with pytest.raises(GoWAUnsupportedMedia, match="Unsupported media type"):
++            await sender.send(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_sender_failure_raises_media_send_error() -> None:
++    """Test that sender failures raise GoWAMediaSendError."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_client = AsyncMock(spec=GoWAClient)
++    mock_client.send_message.side_effect = RuntimeError("Network error")
++
++    sender = GoWAMediaSender(gowa_client=mock_client)
++    with pytest.raises(GoWAMediaSendError, match="Failed to send media"):
++        await sender.send(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_sender_uses_default_client() -> None:
++    """Test that sender creates default client when not provided."""
++    config = GoWAConfig(use_mock_transport=True)
++    sender = GoWAMediaSender(config=config)
++    
++    assert sender.gowa_client is not None
++    assert isinstance(sender.gowa_client, GoWAClient)
++
++
++def test_sender_initialization() -> None:
++    """Test sender initialization with custom dependencies."""
++    config = GoWAConfig(use_mock_transport=True)
++    mock_client = AsyncMock(spec=GoWAClient)
++    
++    sender = GoWAMediaSender(gowa_client=mock_client, config=config)
++    
++    assert sender.gowa_client is mock_client
++    assert sender.config is config
+\ No newline at end of file
+diff --git a/tests/gowa_media/test_service.py b/tests/gowa_media/test_service.py
+new file mode 100644
+index 0000000..335adb0
+--- /dev/null
++++ b/tests/gowa_media/test_service.py
+@@ -0,0 +1,162 @@
++from __future__ import annotations
++
++from datetime import UTC, datetime
++from typing import Any
++from unittest.mock import AsyncMock
++
++import pytest
++
++from app.gowa.media.exceptions import GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
++from app.gowa.media.sender import GoWAMediaSender
++from app.gowa.media.service import GoWAMediaService
++from app.media.models import MediaMetadata, MediaType
++from app.media.pipeline.interfaces import MediaResource
++from plugins.gowa.config import GoWAConfig
++
++
++def _create_metadata(media_type: MediaType, **kwargs: object) -> MediaMetadata:
++    """Helper to create media metadata for testing."""
++    defaults = {
++        "type": media_type,
++        "mime_type": "image/jpeg",
++        "size": 1024,
++        "sha256": "abc123",
++        "created_at": datetime.now(UTC),
++    }
++    defaults.update(kwargs)
++    return MediaMetadata(**defaults)
++
++
++def _create_resource(metadata: MediaMetadata, storage_key: str = "test/key") -> MediaResource:
++    """Helper to create a MediaResource for testing."""
++    return MediaResource(metadata=metadata, storage_key=storage_key, content=b"test", ready=True)
++
++
++@pytest.mark.anyio
++async def test_service_send_media_success() -> None:
++    """Test successful media sending through service."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    mock_sender.send.return_value = {
++        "status": "sent",
++        "media_id": metadata.id,
++        "recipient": "15551234567",
++        "message_id": "gowa-image-12345",
++        "provider": "gowa",
++    }
++
++    config = GoWAConfig(enabled=True, use_mock_transport=True)
++    service = GoWAMediaService(config=config, sender=mock_sender)
++    
++    result = await service.send_media(resource, recipient="15551234567")
++
++    assert result["status"] == "sent"
++    assert result["media_id"] == metadata.id
++    assert result["recipient"] == "15551234567"
++    mock_sender.send.assert_called_once_with(resource, "15551234567")
++
++
++@pytest.mark.anyio
++async def test_service_validation_error_propagates() -> None:
++    """Test that validation errors propagate from sender."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    mock_sender.send.side_effect = GoWAValidationError("Invalid resource")
++
++    config = GoWAConfig(enabled=True, use_mock_transport=True)
++    service = GoWAMediaService(config=config, sender=mock_sender)
++
++    with pytest.raises(GoWAValidationError, match="Invalid resource"):
++        await service.send_media(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_service_unsupported_media_propagates() -> None:
++    """Test that unsupported media errors propagate from sender."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    mock_sender.send.side_effect = GoWAUnsupportedMedia("Unsupported type")
++
++    config = GoWAConfig(enabled=True, use_mock_transport=True)
++    service = GoWAMediaService(config=config, sender=mock_sender)
++
++    with pytest.raises(GoWAUnsupportedMedia, match="Unsupported type"):
++        await service.send_media(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_service_send_error_propagates() -> None:
++    """Test that send errors propagate from sender."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    mock_sender.send.side_effect = GoWAMediaSendError("Send failed")
++
++    config = GoWAConfig(enabled=True, use_mock_transport=True)
++    service = GoWAMediaService(config=config, sender=mock_sender)
++
++    with pytest.raises(GoWAMediaSendError, match="Send failed"):
++        await service.send_media(resource, recipient="15551234567")
++
++
++@pytest.mark.anyio
++async def test_service_unexpected_error_wrapped() -> None:
++    """Test that unexpected errors are wrapped in GoWAMediaSendError."""
++    metadata = _create_metadata(MediaType.PHOTO)
++    resource = _create_resource(metadata)
++
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    mock_sender.send.side_effect = RuntimeError("Unexpected error")
++
++    config = GoWAConfig(enabled=True, use_mock_transport=True)
++    service = GoWAMediaService(config=config, sender=mock_sender)
++
++    with pytest.raises(GoWAMediaSendError, match="Unexpected error sending media"):
++        await service.send_media(resource, recipient="15551234567")
++
++
++def test_service_configuration_validation_disabled() -> None:
++    """Test service validation when GoWA is disabled."""
++    config = GoWAConfig(enabled=False, use_mock_transport=True)
++    service = GoWAMediaService(config=config)
++
++    with pytest.raises(GoWAValidationError, match="not enabled"):
++        # We need to call a method that validates config
++        # Since send_media is async, we'll test the validation directly
++        service._validate_configuration()
++
++
++def test_service_configuration_validation_no_base_url() -> None:
++    """Test service validation when base_url is missing."""
++    config = GoWAConfig(enabled=True, base_url="", use_mock_transport=True)
++    service = GoWAMediaService(config=config)
++
++    with pytest.raises(GoWAValidationError, match="base_url"):
++        service._validate_configuration()
++
++
++def test_service_initialization() -> None:
++    """Test service initialization with custom dependencies."""
++    config = GoWAConfig(use_mock_transport=True)
++    mock_sender = AsyncMock(spec=GoWAMediaSender)
++    
++    service = GoWAMediaService(config=config, sender=mock_sender)
++    
++    assert service.config is config
++    assert service.sender is mock_sender
++
++
++def test_service_creates_default_sender() -> None:
++    """Test that service creates default sender when not provided."""
++    config = GoWAConfig(use_mock_transport=True)
++    service = GoWAMediaService(config=config)
++    
++    assert service.sender is not None
++    assert isinstance(service.sender, GoWAMediaSender)
+\ No newline at end of file
