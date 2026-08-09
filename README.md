@@ -29,20 +29,20 @@ BerTele2 is an open-source Telegram MTProto gateway built with FastAPI and Telet
 
 ## AI SDK Compatibility
 
-BerTele2 includes an AI Development Kit (`.ai/`) that documents the project for AI coding agents. The following agents are supported:
+BerTele2 includes an AI Development Kit (`.ai/`) that documents the project for AI coding agents. The SDK is **designed to be compatible with** the following agents. Compatibility is intended, not verified — no agent has been formally tested against this SDK.
 
 | Agent | Status |
 | --- | --- |
-| ChatGPT | ✅ Supported |
-| Codex | ✅ Supported |
-| Claude Code | ✅ Supported |
-| Gemini CLI | ✅ Supported |
-| Cline | ✅ Supported |
-| RooCode | ✅ Supported |
-| Cursor | ✅ Supported |
-| Windsurf | ✅ Supported |
-| Continue | ✅ Supported |
-| OpenHands | ✅ Supported |
+| ChatGPT | Designed to be compatible with |
+| Codex | Designed to be compatible with |
+| Claude Code | Designed to be compatible with |
+| Gemini CLI | Designed to be compatible with |
+| Cline | Designed to be compatible with |
+| RooCode | Designed to be compatible with |
+| Cursor | Designed to be compatible with |
+| Windsurf | Designed to be compatible with |
+| Continue | Designed to be compatible with |
+| OpenHands | Designed to be compatible with |
 
 See [`.ai/README.md`](.ai/README.md) for the full AI SDK documentation.
 

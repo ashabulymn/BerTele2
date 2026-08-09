@@ -4,11 +4,15 @@ This manifest defines the version, compatibility, and required documents for the
 
 ## sdk_version
 
-`1.0.0`
+`TBD`
+
+> No AI SDK version was defined before this Epic. The version will be set when the SDK reaches a stable release.
 
 ## architecture_version
 
-`1.0`
+`TBD`
+
+> No architecture version was defined before this Epic. The version will be set when the architecture reaches a stable release.
 
 ## minimum_supported_agent
 
@@ -21,18 +25,20 @@ Any AI coding agent that can:
 
 ## supported_agents
 
+The AI SDK is **designed to be compatible with** the following agents. Compatibility is intended, not verified — no agent has been formally tested against this SDK.
+
 | Agent | Status |
 | --- | --- |
-| ChatGPT | ✅ Supported |
-| Codex | ✅ Supported |
-| Claude Code | ✅ Supported |
-| Gemini CLI | ✅ Supported |
-| Cline | ✅ Supported |
-| RooCode | ✅ Supported |
-| Cursor | ✅ Supported |
-| Windsurf | ✅ Supported |
-| Continue | ✅ Supported |
-| OpenHands | ✅ Supported |
+| ChatGPT | Designed to be compatible with |
+| Codex | Designed to be compatible with |
+| Claude Code | Designed to be compatible with |
+| Gemini CLI | Designed to be compatible with |
+| Cline | Designed to be compatible with |
+| RooCode | Designed to be compatible with |
+| Cursor | Designed to be compatible with |
+| Windsurf | Designed to be compatible with |
+| Continue | Designed to be compatible with |
+| OpenHands | Designed to be compatible with |
 
 ## required_documents
 

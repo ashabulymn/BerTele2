@@ -47,6 +47,8 @@ The following rules are **mandatory** for all GoWA-related development:
 
 - **Authentication credentials must never appear inside workflow definitions.** Host, username, password, and authentication tokens must never be stored in workflow nodes, workflow definitions, or any persisted workflow data.
 
+- **Authentication logic stays inside the Connector layer.** All GoWA authentication logic (credential validation, token acquisition, request signing, and connection handling) MUST remain inside the GoWA Connector layer. It must never be implemented in workflow nodes, services, senders, or any other layer.
+
 See [context/gowa.md](context/gowa.md) for the full GoWA architecture documentation.
 
 ## Enforcement

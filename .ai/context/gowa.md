@@ -9,11 +9,11 @@ The GoWA connector bridges BerTele2 to GoWA (a WhatsApp gateway) for sending med
 ## Architecture
 
 ```mermaid
-flowchart TD
-    Connection[GoWA Connection] --> Connector[Connector]
-    Connector --> Device[Device]
-    Device --> Node[Workflow Node]
-    Node --> Sender[Media Sender]
+flowchart LR
+    Connection[GoWA Connection<br/>host<br/>username<br/>password] --> Connector[GoWA Connector]
+    Connector -- device_id --> Device[GoWA Device]
+    Device -- chat_id --> Node[Workflow Node]
+    Node --> Sender[GoWA Service / Sender]
 ```
 
 ### Authentication Model
@@ -49,16 +49,6 @@ Nodes **MUST NEVER** contain:
 - username
 - password
 - authentication tokens
-
-## Architecture Diagram
-
-```mermaid
-flowchart LR
-    Connection[GoWA Connection] --> Connector[Connector]
-    Connector --> Device[Device]
-    Device --> Node[Workflow Node]
-    Node --> Sender[Media Sender]
-```
 
 ## Main Components
 
