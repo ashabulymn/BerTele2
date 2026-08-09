@@ -24,10 +24,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **GoWA Context** (`context/gowa.md`): Updated with authentication model, device model, node model, and a single architecture diagram showing the data flow (host + username + password at the Connection; `device_id` at the Connector→Device boundary; `chat_id` at the Device→Node boundary). Added cross-references to `AI_MANIFEST.md`, `SYSTEM_PROMPT.md`, and `AI_CHANGELOG.md`.
 - **Development Rules** (`development-rules.md`): Added "GoWA Authentication & Node Model" section with mandatory rules. Added cross-reference to `context/gowa.md`.
+- **Roadmap** (`roadmap.md`): Corrected Epic A1 classification. Epic A1 is the AI SDK documentation-only epic (Manifest, System Prompt, AI SDK Changelog, GoWA documentation, quality gates) and is now recorded as **Complete** (with Epic A0) under milestone M5 — AI SDK. The Automation Engine epic was renumbered to Epic A2 and moved to Future Epics. Release target 0.1.0 reflects the AI SDK as complete.
+
+### Commits
+
+- **A0** — `b848797` — `docs(ai): introduce BerTele2 AI Development Kit`
+- **A1 (primary)** — `040588b` — `docs(ai): standardize GoWA architecture and AI SDK`
+- **A1 (compliance)** — `d25d69a` — `docs(ai): fix Epic A1 compliance gaps`
+- **A1 (compliance finalize)** — `docs(ai): finalize Epic A1 compliance` — adds the unified Gate Failure Policy to `SYSTEM_PROMPT.md` (STOP / NOT commit / NOT push / report on any gate failure), documents the A0/A1 commit history, and fixes the project CHANGELOG link.
 
 ### Notes
 
 - This Epic (A1) is **documentation-only**. No application code, APIs, or connectors were modified.
+- This compliance fix is **documentation-only**. No application code, APIs, or connectors were modified.
 - The SDK version is intentionally `TBD`; the AI SDK version will be assigned when the SDK reaches a stable release.
 
 ## Related Documents
@@ -35,4 +44,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - [README.md](README.md) — AI SDK overview and index.
 - [AI_MANIFEST.md](AI_MANIFEST.md) — SDK manifest.
 - [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
-- [../../CHANGELOG.md](../../CHANGELOG.md) — Application changelog.
+- [../CHANGELOG.md](../CHANGELOG.md) — Application changelog.

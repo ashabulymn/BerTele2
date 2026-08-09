@@ -10,7 +10,7 @@ This document tracks milestones, epics, releases, and technical debt.
 | M2 — Media Pipeline | ✅ Complete | Media engine, storage providers, pipeline steps |
 | M3 — Connectors | ✅ Complete | GoWA and n8n connectors |
 | M4 — Dashboard | ✅ Complete | Overview, logs, metrics, WebSocket |
-| M5 — AI SDK | 🚧 In Progress | This Epic (A0) |
+| M5 — AI SDK | ✅ Complete | Epics A0 + A1 (AI Development Kit) |
 | M6 — Automation Engine | 🔜 Planned | Workflow triggers, actions, conditions, scheduler |
 
 ## Epics
@@ -25,29 +25,25 @@ This document tracks milestones, epics, releases, and technical debt.
 | Epic 17 | Media pipeline | `patches/epic-17.patch` |
 | Epic 18 | Storage providers | `patches/epic-18.patch` |
 | Epic 19 | GoWA media + connectors | `patches/epic-19.patch`, `patches/epic-19R.patch` |
-
-### Current Epic
-
-| Epic | Description | Status |
-| --- | --- | --- |
-| Epic A0 | AI Development Kit (AI SDK) | 🚧 In Progress |
+| Epic A0 | AI Development Kit (AI SDK) | `patches/epic-a0.patch` |
+| Epic A1 | AI SDK — documentation-only (Manifest, System Prompt, GoWA documentation, quality gates) | `patches/epic-a1.patch` |
 
 ### Future Epics
 
 | Epic | Description |
 | --- | --- |
-| Epic A1 | Automation Engine — triggers and actions |
-| Epic A2 | Automation Engine — scheduler and workflows |
-| Epic A3 | Additional storage providers (S3, GCS) |
-| Epic A4 | Worker pool for background tasks |
-| Epic A5 | Multi-tenant isolation |
-| Epic A6 | Additional connectors |
+| Epic A2 | Automation Engine — triggers and actions |
+| Epic A3 | Automation Engine — scheduler and workflows |
+| Epic A4 | Additional storage providers (S3, GCS) |
+| Epic A5 | Worker pool for background tasks |
+| Epic A6 | Multi-tenant isolation |
+| Epic A7 | Additional connectors |
 
 ## Release Targets
 
 | Version | Target | Contents |
 | --- | --- | --- |
-| 0.1.0 | Next | AI SDK, automation engine foundation |
+| 0.1.0 | Next | AI SDK (complete), automation engine foundation |
 | 0.2.0 | Later | Storage providers, worker pool |
 | 1.0.0 | Future | Stable public API, multi-tenant |
 

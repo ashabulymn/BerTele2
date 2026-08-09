@@ -50,6 +50,17 @@ See [architecture.md](architecture.md) and [context/gowa.md](context/gowa.md) fo
 
 Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
 
+> **Gate Failure Policy — MANDATORY.**
+>
+> If ANY quality gate fails — **Unit Tests**, **Scope Verification**, **Git Verification**, **Patch Verification**, or **Final Self Review** — the AI agent MUST:
+>
+> 1. **STOP** — halt all further work immediately.
+> 2. **NOT commit** — do not create any commit.
+> 3. **NOT push** — do not push anything to the remote.
+> 4. **Report the failure** — report the failed gate and the required remediation before proceeding.
+>
+> This policy applies to every gate: Unit Tests, Scope Verification, Git Verification, Patch Verification, and Final Self Review.
+
 ### 4.1 Unit Tests
 
 - All new behavior has unit tests.
