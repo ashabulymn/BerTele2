@@ -1,14 +1,14 @@
-"""Automation Engine — triggers and actions (Epic A2).
+"""Automation Engine — triggers, actions, workflows and scheduling (Epics A2/A3).
 
-This package provides the foundation of the Automation Engine:
+This package provides the Automation Engine foundation:
 
-- ``Trigger`` / ``TriggerRegistry`` — detect domain events.
-- ``Action`` / ``ActionRegistry`` — execute side effects (e.g. GoWA media send).
+- ``Trigger`` / ``TriggerRegistry`` — detect domain events (Epic A2).
+- ``Action`` / ``ActionRegistry`` — execute side effects (e.g. GoWA media send) (Epic A2).
 - ``AutomationEngine`` — subscribes to the event broker, fires triggers and
-  runs the actions bound to each trigger.
-
-Scheduling, workflows and conditions are intentionally out of scope for this
-epic and will be delivered by Epic A3.
+  runs the actions bound to each trigger (Epic A2).
+- ``Workflow`` / ``WorkflowRegistry`` / ``WorkflowExecutor`` — run ordered
+  action sequences gated by conditions (Epic A3).
+- ``Scheduler`` / ``ScheduleRegistry`` — run workflows on a schedule (Epic A3).
 """
 
 from app.automation.actions import Action, ActionRegistry, GoWASendMediaAction
@@ -26,7 +26,40 @@ from app.automation.exceptions import (
     UnknownActionError,
     UnknownTriggerError,
 )
+from app.automation.scheduler import (
+    DailySchedule,
+    IntervalSchedule,
+    ScheduleError,
+    ScheduleRegistry,
+    ScheduledRunCompleted,
+    ScheduledRunStarted,
+    ScheduledWorkflow,
+    Scheduler,
+    UnknownScheduleError,
+)
 from app.automation.triggers import EventTrigger, Trigger, TriggerRegistry
+from app.automation.workflows import (
+    ConditionError,
+    ConditionRegistry,
+    FieldEquals,
+    FieldExists,
+    UnknownConditionError,
+    UnknownWorkflowError,
+    WorkflowCompleted,
+    WorkflowError,
+    WorkflowExecutor,
+    WorkflowFailed,
+    WorkflowManager,
+    WorkflowRegistry,
+    WorkflowRunResult,
+    WorkflowSpec,
+    WorkflowStarted,
+    WorkflowStep,
+    WorkflowStepCompleted,
+    WorkflowStepFailed,
+    WorkflowStepSkipped,
+    WorkflowStepStarted,
+)
 
 __all__ = [
     "Action",
@@ -38,11 +71,40 @@ __all__ = [
     "AutomationEngine",
     "AutomationError",
     "AutomationTriggered",
+    "ConditionError",
+    "ConditionRegistry",
+    "DailySchedule",
     "EventTrigger",
+    "FieldEquals",
+    "FieldExists",
     "GoWASendMediaAction",
+    "IntervalSchedule",
+    "ScheduleError",
+    "ScheduleRegistry",
+    "ScheduledRunCompleted",
+    "ScheduledRunStarted",
+    "ScheduledWorkflow",
+    "Scheduler",
     "Trigger",
     "TriggerError",
     "TriggerRegistry",
     "UnknownActionError",
+    "UnknownConditionError",
+    "UnknownScheduleError",
     "UnknownTriggerError",
+    "UnknownWorkflowError",
+    "WorkflowCompleted",
+    "WorkflowError",
+    "WorkflowExecutor",
+    "WorkflowFailed",
+    "WorkflowManager",
+    "WorkflowRegistry",
+    "WorkflowRunResult",
+    "WorkflowSpec",
+    "WorkflowStarted",
+    "WorkflowStep",
+    "WorkflowStepCompleted",
+    "WorkflowStepFailed",
+    "WorkflowStepSkipped",
+    "WorkflowStepStarted",
 ]
