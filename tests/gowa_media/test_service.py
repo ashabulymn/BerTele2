@@ -42,20 +42,22 @@ async def test_service_send_media_success() -> None:
     mock_sender.send.return_value = {
         "status": "sent",
         "media_id": metadata.id,
-        "recipient": "15551234567",
+        "device_id": "dev-001",
+        "chat_id": "15551234567",
         "message_id": "gowa-image-12345",
         "provider": "gowa",
     }
 
     config = GoWAConfig(enabled=True, use_mock_transport=True)
     service = GoWAMediaService(config=config, sender=mock_sender)
-    
-    result = await service.send_media(resource, recipient="15551234567")
+
+    result = await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 
     assert result["status"] == "sent"
     assert result["media_id"] == metadata.id
-    assert result["recipient"] == "15551234567"
-    mock_sender.send.assert_called_once_with(resource, "15551234567")
+    assert result["device_id"] == "dev-001"
+    assert result["chat_id"] == "15551234567"
+    mock_sender.send.assert_called_once_with(resource, "dev-001", "15551234567")
 
 
 @pytest.mark.anyio
@@ -71,7 +73,7 @@ async def test_service_validation_error_propagates() -> None:
     service = GoWAMediaService(config=config, sender=mock_sender)
 
     with pytest.raises(GoWAValidationError, match="Invalid resource"):
-        await service.send_media(resource, recipient="15551234567")
+        await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 
 
 @pytest.mark.anyio
@@ -87,7 +89,7 @@ async def test_service_unsupported_media_propagates() -> None:
     service = GoWAMediaService(config=config, sender=mock_sender)
 
     with pytest.raises(GoWAUnsupportedMedia, match="Unsupported type"):
-        await service.send_media(resource, recipient="15551234567")
+        await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 
 
 @pytest.mark.anyio
@@ -103,7 +105,7 @@ async def test_service_send_error_propagates() -> None:
     service = GoWAMediaService(config=config, sender=mock_sender)
 
     with pytest.raises(GoWAMediaSendError, match="Send failed"):
-        await service.send_media(resource, recipient="15551234567")
+        await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 
 
 @pytest.mark.anyio
@@ -119,7 +121,7 @@ async def test_service_unexpected_error_wrapped() -> None:
     service = GoWAMediaService(config=config, sender=mock_sender)
 
     with pytest.raises(GoWAMediaSendError, match="Unexpected error sending media"):
-        await service.send_media(resource, recipient="15551234567")
+        await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 
 
 def test_service_configuration_validation_disabled() -> None:

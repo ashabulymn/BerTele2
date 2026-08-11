@@ -3,7 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.gowa.media.exceptions import GoWAMediaError, GoWAMediaSendError, GoWAUnsupportedMedia, GoWAValidationError
+from app.gowa.media.exceptions import (
+    GoWAMediaError,
+    GoWAMediaSendError,
+    GoWAUnsupportedMedia,
+    GoWAValidationError,
+    sanitize_error_message,
+)
 from app.gowa.media.sender import GoWAMediaSender
 from app.media.pipeline.interfaces import MediaResource
 from plugins.gowa.config import GoWAConfig
@@ -19,6 +25,7 @@ class GoWAMediaService:
     - Invoke GoWAMediaSender
     - Handle delivery results
     - Translate GoWA errors into BerTele2 exceptions
+    - Sanitize external errors so credentials never leak
     """
 
     def __init__(
@@ -32,43 +39,49 @@ class GoWAMediaService:
         self.sender = sender or GoWAMediaSender(config=self.config)
         self.logger = logger or logging.getLogger("app.gowa.media.service")
 
-    async def send_media(self, resource: MediaResource, recipient: str) -> dict[str, Any]:
-        """Send a media resource to a WhatsApp recipient.
+    async def send_media(self, resource: MediaResource, device_id: str, chat_id: str) -> dict[str, Any]:
+        """Send a media resource to a WhatsApp chat.
 
         Args:
             resource: The media resource from the pipeline.
-            recipient: The WhatsApp recipient number.
+            device_id: The GoWA device that owns the chat.
+            chat_id: The WhatsApp chat identifier to send to.
 
         Returns:
             A dictionary with delivery result information.
 
         Raises:
-            GoWAValidationError: If the resource or configuration is invalid.
+            GoWAValidationError: If the resource, target or configuration is invalid.
             GoWAUnsupportedMedia: If the media type is not supported.
             GoWAMediaSendError: If sending fails.
         """
         self._validate_configuration()
 
         try:
-            result = await self.sender.send(resource, recipient)
+            result = await self.sender.send(resource, device_id, chat_id)
             return result
 
         except GoWAValidationError:
             raise
         except GoWAUnsupportedMedia:
             raise
-        except GoWAMediaSendError:
+        except GoWAMediaSendError as exc:
+            # Sanitize the transport error in case GoWA echoed credentials.
+            sanitized = sanitize_error_message(str(exc))
+            raise GoWAMediaSendError(sanitized) from exc.__cause__
+        except GoWAMediaError:
             raise
         except Exception as exc:
             self.logger.error(
                 "Unexpected error in GoWA media service",
                 extra={
                     "media_id": resource.metadata.id,
-                    "recipient": recipient,
+                    "device_id": device_id,
+                    "chat_id": chat_id,
                     "error": str(exc),
                 },
             )
-            raise GoWAMediaSendError(f"Unexpected error sending media: {exc}") from exc
+            raise GoWAMediaSendError(sanitize_error_message(f"Unexpected error sending media: {exc}")) from exc
 
     def _validate_configuration(self) -> None:
         """Validate the service configuration.

@@ -6,7 +6,12 @@ The GoWA Media Sender is a transport-only component that integrates the Media Pi
 
 ```
 Media Pipeline → MediaResource → GoWAMediaSender → GoWAClient → WhatsApp
+                                        (device_id + chat_id)
 ```
+
+Authentication belongs to the GoWA connector (`GoWAClient` / `GoWAConfig`).
+The sender never receives or stores connection credentials and never accepts
+`host`, `username` or `password` as workflow/node fields.
 
 ### Components
 
@@ -31,10 +36,11 @@ Media Pipeline → MediaResource → GoWAMediaSender → GoWAClient → WhatsApp
 ```
 1. Receive MediaResource from pipeline
 2. Validate resource (storage_key, ready, mime_type, size)
-3. Map MediaMetadata to GoWA payload
-4. Set recipient in payload
-5. Call GoWAClient.send_message()
-6. Return delivery result
+3. Validate target (device_id, chat_id)
+4. Map MediaMetadata to GoWA payload
+5. Set chat_id as the GoWA recipient (to field) and device_id in metadata
+6. Call GoWAClient.send_message()
+7. Return delivery result
 ```
 
 ### Example Flow
@@ -49,11 +55,12 @@ service = GoWAMediaService()
 resource: MediaResource = await pipeline.process(...)
 
 # Send to WhatsApp
-result = await service.send_media(resource, recipient="15551234567")
+result = await service.send_media(resource, device_id="dev-001", chat_id="15551234567")
 # {
 #     "status": "sent",
 #     "media_id": "...",
-#     "recipient": "15551234567",
+#     "device_id": "dev-001",
+#     "chat_id": "15551234567",
 #     "message_id": "gowa-...",
 #     "provider": "gowa",
 #     "metadata": {...}
@@ -79,13 +86,14 @@ result = await service.send_media(resource, recipient="15551234567")
 ```python
 {
     "type": "image",  # GoWA media type
-    "to": "15551234567",  # Recipient (set by sender)
+    "to": "15551234567",  # chat_id (set by sender)
     "media_url": "photo/abc-123",  # Storage key from pipeline
     "mime_type": "image/jpeg",
     "filename": "photo.jpg",
     "caption": "Optional caption",
     "metadata": {
         "media_id": "uuid",
+        "device_id": "dev-001",  # GoWA device that owns the chat
         "size": 102400,
         "created_at": "2024-01-01T00:00:00Z",
         # Optional fields:
@@ -132,13 +140,17 @@ config = GoWAConfig(
 
 ### POST /gowa/media/send
 
-Send a media resource to a WhatsApp recipient.
+Send a media resource to a WhatsApp chat. The target is identified by
+`device_id` (the GoWA device that owns the chat) and `chat_id` (the WhatsApp
+chat identifier). Connection credentials are never accepted here;
+authentication lives in the GoWA connector.
 
 **Request:**
 ```json
 {
     "media_id": "uuid-of-processed-media",
-    "recipient": "15551234567"
+    "device_id": "dev-001",
+    "chat_id": "15551234567"
 }
 ```
 
@@ -147,7 +159,8 @@ Send a media resource to a WhatsApp recipient.
 {
     "status": "sent",
     "media_id": "uuid",
-    "recipient": "15551234567",
+    "device_id": "dev-001",
+    "chat_id": "15551234567",
     "message_id": "gowa-image-12345",
     "provider": "gowa",
     "metadata": {
