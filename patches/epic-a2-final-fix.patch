@@ -1,0 +1,168 @@
+diff --git a/tests/automation/test_automation.py b/tests/automation/test_automation.py
+index e824e91..ff7ee11 100644
+--- a/tests/automation/test_automation.py
++++ b/tests/automation/test_automation.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ import logging
++from unittest.mock import AsyncMock
+ 
+ import pytest
+ 
+@@ -10,6 +11,10 @@ from app.automation.exceptions import ActionError, UnknownActionError, UnknownTr
+ from app.automation.triggers import EventTrigger, TriggerRegistry
+ from app.events import EventBroker
+ from app.events.event import Event
++from app.gowa.media.exceptions import GoWAMediaError
++from app.gowa.media.service import GoWAMediaService
++from app.media.models import MediaType
++from app.media.pipeline.interfaces import MediaResource
+ 
+ 
+ @pytest.mark.anyio
+@@ -106,6 +111,144 @@ async def test_gowa_send_media_action_invalid_media_type() -> None:
+         await action.execute(payload)
+ 
+ 
++@pytest.mark.anyio
++async def test_gowa_send_media_action_delegates_to_service() -> None:
++    """GoWASendMediaAction must actually delegate to GoWAMediaService.
++
++    Verifies the action builds the MediaResource from the payload and
++    forwards it together with device_id and chat_id to send_media(),
++    then returns the service result.
++    """
++    service = AsyncMock(spec=GoWAMediaService)
++    expected_result = {"status": "sent", "message_id": "m-1"}
++    service.send_media.return_value = expected_result
++
++    action = GoWASendMediaAction(service=service)  # type: ignore[arg-type]
++    payload = {
++        "device_id": "device-123",
++        "chat_id": "chat-456",
++        "storage_key": "media/storage/photo.png",
++        "metadata": {
++            "type": "photo",
++            "mime_type": "image/png",
++            "size": 2048,
++            "sha256": "abc123",
++            "filename": "photo.png",
++            "caption": "A test photo",
++        },
++    }
++
++    result = await action.execute(payload)
++
++    service.send_media.assert_awaited_once()
++
++    args = service.send_media.await_args.args
++    assert len(args) == 3
++    assert service.send_media.await_args.kwargs == {}
++
++    resource, device_id, chat_id = args
++    assert isinstance(resource, MediaResource)
++    assert resource.storage_key == "media/storage/photo.png"
++    assert resource.content is None
++    assert resource.ready is True
++    assert resource.metadata.type == MediaType.PHOTO
++    assert resource.metadata.mime_type == "image/png"
++    assert resource.metadata.size == 2048
++    assert resource.metadata.sha256 == "abc123"
++    assert resource.metadata.filename == "photo.png"
++    assert resource.metadata.caption == "A test photo"
++
++    assert device_id == "device-123"
++    assert chat_id == "chat-456"
++
++    assert result == expected_result
++
++
++@pytest.mark.anyio
++async def test_gowa_send_media_action_never_forwards_connection_credentials() -> None:
++    """GoWA connection credentials are not action target parameters.
++
++    The action's public API only accepts device_id, chat_id and the media
++    payload; connection credentials (host, username, password, token,
++    api_key, authorization) must never be forwarded to GoWAMediaService.
++    """
++    service = AsyncMock(spec=GoWAMediaService)
++    service.send_media.return_value = {"status": "sent", "message_id": "m-42"}
++
++    action = GoWASendMediaAction(service=service)  # type: ignore[arg-type]
++    payload = {
++        "device_id": "device-999",
++        "chat_id": "chat-888",
++        "storage_key": "media/storage/report.pdf",
++        "metadata": {
++            "type": "document",
++            "mime_type": "application/pdf",
++            "size": 5120,
++            "sha256": "def456",
++            "filename": "report.pdf",
++        },
++        "host": "https://gowa.example.internal",
++        "username": "admin",
++        "password": "s3cret",
++        "token": "tok-123",
++        "api_key": "key-456",
++        "authorization": "Bearer very-secret-token",
++    }
++
++    result = await action.execute(payload)
++
++    service.send_media.assert_awaited_once()
++
++    args = service.send_media.await_args.args
++    assert len(args) == 3
++    assert service.send_media.await_args.kwargs == {}
++
++    resource, device_id, chat_id = args
++    assert device_id == "device-999"
++    assert chat_id == "chat-888"
++
++    assert isinstance(resource, MediaResource)
++    assert resource.storage_key == "media/storage/report.pdf"
++    assert resource.content is None
++    assert resource.metadata.type == MediaType.DOCUMENT
++    assert resource.metadata.mime_type == "application/pdf"
++    assert resource.metadata.sha256 == "def456"
++
++    # No credential value may reach the media service in any form.
++    forwarded = repr(args)
++    for secret in (
++        "https://gowa.example.internal",
++        "admin",
++        "s3cret",
++        "tok-123",
++        "key-456",
++        "Bearer very-secret-token",
++    ):
++        assert secret not in forwarded
++
++    assert result == {"status": "sent", "message_id": "m-42"}
++
++
++@pytest.mark.anyio
++async def test_gowa_send_media_action_propagates_service_error() -> None:
++    """A GoWAMediaError from the service is propagated per the contract."""
++    service = AsyncMock(spec=GoWAMediaService)
++    service.send_media.side_effect = GoWAMediaError("upstream failed")
++
++    action = GoWASendMediaAction(service=service)  # type: ignore[arg-type]
++    payload = {
++        "device_id": "device-1",
++        "chat_id": "chat-1",
++        "storage_key": "key",
++        "metadata": {"type": "photo", "mime_type": "image/png", "size": 10, "sha256": "abc"},
++    }
++
++    with pytest.raises(ActionError, match="upstream failed"):
++        await action.execute(payload)
++
++    service.send_media.assert_awaited_once()
++
++
+ @pytest.mark.anyio
+ async def test_engine_fires_trigger_and_runs_actions() -> None:
+     broker = EventBroker(logger=logging.getLogger("test.automation"))

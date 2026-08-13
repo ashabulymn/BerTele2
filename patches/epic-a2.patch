@@ -1,0 +1,717 @@
+diff --git a/app/automation/__init__.py b/app/automation/__init__.py
+new file mode 100644
+index 0000000..bbde79e
+--- /dev/null
++++ b/app/automation/__init__.py
+@@ -0,0 +1,48 @@
++"""Automation Engine — triggers and actions (Epic A2).
++
++This package provides the foundation of the Automation Engine:
++
++- ``Trigger`` / ``TriggerRegistry`` — detect domain events.
++- ``Action`` / ``ActionRegistry`` — execute side effects (e.g. GoWA media send).
++- ``AutomationEngine`` — subscribes to the event broker, fires triggers and
++  runs the actions bound to each trigger.
++
++Scheduling, workflows and conditions are intentionally out of scope for this
++epic and will be delivered by Epic A3.
++"""
++
++from app.automation.actions import Action, ActionRegistry, GoWASendMediaAction
++from app.automation.engine import AutomationEngine
++from app.automation.events import (
++    AutomationActionCompleted,
++    AutomationActionFailed,
++    AutomationActionStarted,
++    AutomationTriggered,
++)
++from app.automation.exceptions import (
++    ActionError,
++    AutomationError,
++    TriggerError,
++    UnknownActionError,
++    UnknownTriggerError,
++)
++from app.automation.triggers import EventTrigger, Trigger, TriggerRegistry
++
++__all__ = [
++    "Action",
++    "ActionError",
++    "ActionRegistry",
++    "AutomationActionCompleted",
++    "AutomationActionFailed",
++    "AutomationActionStarted",
++    "AutomationEngine",
++    "AutomationError",
++    "AutomationTriggered",
++    "EventTrigger",
++    "GoWASendMediaAction",
++    "Trigger",
++    "TriggerError",
++    "TriggerRegistry",
++    "UnknownActionError",
++    "UnknownTriggerError",
++]
+\ No newline at end of file
+diff --git a/app/automation/actions.py b/app/automation/actions.py
+new file mode 100644
+index 0000000..4b7c0f1
+--- /dev/null
++++ b/app/automation/actions.py
+@@ -0,0 +1,138 @@
++"""Actions for the Automation Engine (Epic A2).
++
++An action is a side effect executed when a trigger fires. Actions are
++registered by name and executed by the engine with the event payload.
++"""
++
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from typing import Any, Protocol
++
++from app.automation.exceptions import ActionError, UnknownActionError
++from app.gowa.media.exceptions import GoWAMediaError
++from app.gowa.media.service import GoWAMediaService
++from app.media.models import MediaMetadata, MediaType
++from app.media.pipeline.interfaces import MediaResource
++
++logger = logging.getLogger("app.automation.actions")
++
++
++class Action(Protocol):
++    """Interface implemented by automation actions."""
++
++    name: str
++
++    async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
++        """Execute the action against the event payload.
++
++        Args:
++            payload: The event payload that fired the trigger.
++
++        Returns:
++            A result dictionary describing the action outcome.
++        """
++        ...
++
++
++@dataclass
++class GoWASendMediaAction:
++    """Send a media resource to a WhatsApp chat via GoWA.
++
++    The action expects the following keys in the event payload:
++
++    - ``media_id``: identifier of the processed media resource.
++    - ``device_id``: the GoWA device that owns the chat.
++    - ``chat_id``: the WhatsApp chat identifier to send to.
++    - ``metadata``: a dict with the media metadata (``type``, ``mime_type``,
++      ``size``, ``sha256``, ``filename``, ``caption``).
++    - ``storage_key``: the storage key of the media resource.
++
++    Connection credentials are never accepted here; authentication lives in
++    the GoWA connector.
++    """
++
++    name: str = "gowa.send_media"
++    service: GoWAMediaService | None = None
++
++    def __post_init__(self) -> None:
++        self.service = self.service or GoWAMediaService()
++
++    async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
++        resource = self._build_resource(payload)
++        device_id = self._require(payload, "device_id")
++        chat_id = self._require(payload, "chat_id")
++        try:
++            return await self.service.send_media(resource, device_id, chat_id)
++        except GoWAMediaError as exc:
++            raise ActionError(str(exc)) from exc
++
++    def _build_resource(self, payload: dict[str, Any]) -> MediaResource:
++        metadata_raw = payload.get("metadata")
++        if not isinstance(metadata_raw, dict):
++            raise ActionError("Action payload must include a 'metadata' dict")
++
++        media_type = metadata_raw.get("type")
++        try:
++            media_type_enum = MediaType(media_type)
++        except (TypeError, ValueError) as exc:
++            raise ActionError(f"Unsupported media type '{media_type}'") from exc
++
++        metadata = MediaMetadata(
++            type=media_type_enum,
++            mime_type=self._require(metadata_raw, "mime_type"),
++            size=int(self._require(metadata_raw, "size")),
++            sha256=self._require(metadata_raw, "sha256"),
++            filename=metadata_raw.get("filename"),
++            caption=metadata_raw.get("caption"),
++        )
++        return MediaResource(
++            metadata=metadata,
++            storage_key=self._require(payload, "storage_key"),
++            content=payload.get("content"),
++            ready=bool(payload.get("ready", True)),
++        )
++
++    @staticmethod
++    def _require(data: dict[str, Any], key: str) -> Any:
++        value = data.get(key)
++        if value is None or value == "":
++            raise ActionError(f"Action payload is missing required field '{key}'")
++        return value
++
++
++@dataclass
++class ActionRegistry:
++    """Registry of named actions."""
++
++    _actions: dict[str, Action] = field(default_factory=dict)
++
++    def register(self, action: Action) -> None:
++        """Register an action by its name.
++
++        Args:
++            action: The action to register.
++
++        Raises:
++            ValueError: If an action with the same name is already registered.
++        """
++        if action.name in self._actions:
++            raise ValueError(f"Action '{action.name}' is already registered")
++        self._actions[action.name] = action
++        logger.info("Registered automation action", extra={"action_name": action.name})
++
++    def get(self, name: str) -> Action:
++        """Return a registered action by name.
++
++        Raises:
++            UnknownActionError: If no action with that name is registered.
++        """
++        try:
++            return self._actions[name]
++        except KeyError as exc:
++            raise UnknownActionError(f"Unknown action '{name}'") from exc
++
++    def all(self) -> list[Action]:
++        """Return all registered actions."""
++        return list(self._actions.values())
+\ No newline at end of file
+diff --git a/app/automation/engine.py b/app/automation/engine.py
+new file mode 100644
+index 0000000..2905ce3
+--- /dev/null
++++ b/app/automation/engine.py
+@@ -0,0 +1,121 @@
++"""Automation Engine — triggers and actions (Epic A2).
++
++The engine subscribes to the event broker, feeds each incoming event to the
++registered triggers, and runs the actions bound to each matching trigger.
++"""
++
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from uuid import uuid4
++
++from app.automation.actions import ActionRegistry
++from app.automation.events import (
++    AutomationActionCompleted,
++    AutomationActionFailed,
++    AutomationActionStarted,
++    AutomationTriggered,
++)
++from app.automation.exceptions import ActionError
++from app.automation.triggers import TriggerRegistry
++from app.events.broker import EventBroker
++from app.events.event import Event
++
++logger = logging.getLogger("app.automation.engine")
++
++
++@dataclass
++class AutomationEngine:
++    """Coordinates triggers and actions.
++
++    Args:
++        broker: The event broker the engine subscribes to.
++        triggers: Registry of triggers.
++        actions: Registry of actions.
++        logger: Optional logger override.
++    """
++
++    broker: EventBroker
++    triggers: TriggerRegistry = field(default_factory=TriggerRegistry)
++    actions: ActionRegistry = field(default_factory=ActionRegistry)
++    logger: logging.Logger = field(default_factory=lambda: logging.getLogger("app.automation.engine"))
++
++    def __post_init__(self) -> None:
++        self._subscription_name = "automation.engine"
++
++    def subscribe(self) -> None:
++        """Subscribe the engine to the event broker."""
++        self.broker.subscribe(Event, self._on_event, name=self._subscription_name)
++        self.logger.info("Automation engine subscribed to event broker")
++
++    async def _on_event(self, event: Event) -> None:
++        """Handle an incoming event from the broker."""
++        for trigger in self.triggers.matching(event):
++            await self._fire(trigger.name, event)
++
++    async def _fire(self, trigger_name: str, event: Event) -> None:
++        """Run the actions bound to a trigger."""
++        await self.broker.publish(
++            AutomationTriggered(trigger_name=trigger_name, event_name=event.name, payload=event.payload)
++        )
++        for action in self.actions.all():
++            run_id = uuid4().hex
++            await self.broker.publish(
++                AutomationActionStarted(trigger_name=trigger_name, action_name=action.name, run_id=run_id)
++            )
++            try:
++                result = await action.execute(event.payload)
++            except ActionError as exc:
++                await self.broker.publish(
++                    AutomationActionFailed(
++                        trigger_name=trigger_name,
++                        action_name=action.name,
++                        run_id=run_id,
++                        error=str(exc),
++                    )
++                )
++                self.logger.warning(
++                    "Automation action failed",
++                    extra={
++                        "trigger_name": trigger_name,
++                        "action_name": action.name,
++                        "run_id": run_id,
++                        "error": str(exc),
++                    },
++                )
++                continue
++            except Exception as exc:
++                await self.broker.publish(
++                    AutomationActionFailed(
++                        trigger_name=trigger_name,
++                        action_name=action.name,
++                        run_id=run_id,
++                        error=str(exc),
++                    )
++                )
++                self.logger.exception(
++                    "Unexpected automation action error",
++                    extra={
++                        "trigger_name": trigger_name,
++                        "action_name": action.name,
++                        "run_id": run_id,
++                    },
++                )
++                continue
++            await self.broker.publish(
++                AutomationActionCompleted(
++                    trigger_name=trigger_name,
++                    action_name=action.name,
++                    run_id=run_id,
++                    result=result,
++                )
++            )
++            self.logger.info(
++                "Automation action completed",
++                extra={
++                    "trigger_name": trigger_name,
++                    "action_name": action.name,
++                    "run_id": run_id,
++                },
++            )
+\ No newline at end of file
+diff --git a/app/automation/events.py b/app/automation/events.py
+new file mode 100644
+index 0000000..dba6350
+--- /dev/null
++++ b/app/automation/events.py
+@@ -0,0 +1,63 @@
++"""Domain events emitted by the Automation Engine (Epic A2)."""
++
++from __future__ import annotations
++
++from app.events.event import Event
++
++
++class AutomationTriggered(Event):
++    """Emitted when a trigger fires and its bound actions are about to run."""
++
++    def __init__(self, *, trigger_name: str, event_name: str, payload: dict) -> None:
++        super().__init__(
++            name="automation.triggered",
++            payload={
++                "trigger_name": trigger_name,
++                "event_name": event_name,
++                "payload": payload,
++            },
++        )
++
++
++class AutomationActionStarted(Event):
++    """Emitted when an action begins executing."""
++
++    def __init__(self, *, trigger_name: str, action_name: str, run_id: str) -> None:
++        super().__init__(
++            name="automation.action_started",
++            payload={
++                "trigger_name": trigger_name,
++                "action_name": action_name,
++                "run_id": run_id,
++            },
++        )
++
++
++class AutomationActionCompleted(Event):
++    """Emitted when an action finishes successfully."""
++
++    def __init__(self, *, trigger_name: str, action_name: str, run_id: str, result: dict) -> None:
++        super().__init__(
++            name="automation.action_completed",
++            payload={
++                "trigger_name": trigger_name,
++                "action_name": action_name,
++                "run_id": run_id,
++                "result": result,
++            },
++        )
++
++
++class AutomationActionFailed(Event):
++    """Emitted when an action raises an error."""
++
++    def __init__(self, *, trigger_name: str, action_name: str, run_id: str, error: str) -> None:
++        super().__init__(
++            name="automation.action_failed",
++            payload={
++                "trigger_name": trigger_name,
++                "action_name": action_name,
++                "run_id": run_id,
++                "error": error,
++            },
++        )
+\ No newline at end of file
+diff --git a/app/automation/exceptions.py b/app/automation/exceptions.py
+new file mode 100644
+index 0000000..c5547fa
+--- /dev/null
++++ b/app/automation/exceptions.py
+@@ -0,0 +1,23 @@
++"""Exceptions for the Automation Engine (Epic A2)."""
++
++from __future__ import annotations
++
++
++class AutomationError(Exception):
++    """Base error for the automation engine."""
++
++
++class TriggerError(AutomationError):
++    """Raised when a trigger cannot be evaluated or registered."""
++
++
++class ActionError(AutomationError):
++    """Raised when an action fails to execute."""
++
++
++class UnknownTriggerError(TriggerError):
++    """Raised when a trigger name is not registered."""
++
++
++class UnknownActionError(ActionError):
++    """Raised when an action name is not registered."""
+\ No newline at end of file
+diff --git a/app/automation/triggers.py b/app/automation/triggers.py
+new file mode 100644
+index 0000000..de4777f
+--- /dev/null
++++ b/app/automation/triggers.py
+@@ -0,0 +1,84 @@
++"""Triggers for the Automation Engine (Epic A2).
++
++A trigger detects a domain event and decides whether the bound actions
++should run. Triggers are intentionally decoupled from the event broker:
++the engine feeds each incoming event to every registered trigger.
++"""
++
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from typing import Protocol
++
++from app.automation.exceptions import UnknownTriggerError
++from app.events.event import Event
++
++logger = logging.getLogger("app.automation.triggers")
++
++
++class Trigger(Protocol):
++    """Interface implemented by automation triggers."""
++
++    name: str
++
++    def matches(self, event: Event) -> bool:
++        """Return True when the event should fire this trigger."""
++        ...
++
++
++@dataclass(frozen=True, slots=True)
++class EventTrigger:
++    """Fires when an event with a matching name is observed.
++
++    Args:
++        name: Unique trigger name used for registration and reporting.
++        event_name: The event ``name`` (e.g. ``pipeline.dispatch_completed``)
++            that activates this trigger.
++    """
++
++    name: str
++    event_name: str
++
++    def matches(self, event: Event) -> bool:
++        return event.name == self.event_name
++
++
++@dataclass
++class TriggerRegistry:
++    """Registry of named triggers."""
++
++    _triggers: dict[str, Trigger] = field(default_factory=dict)
++
++    def register(self, trigger: Trigger) -> None:
++        """Register a trigger by its name.
++
++        Args:
++            trigger: The trigger to register.
++
++        Raises:
++            ValueError: If a trigger with the same name is already registered.
++        """
++        if trigger.name in self._triggers:
++            raise ValueError(f"Trigger '{trigger.name}' is already registered")
++        self._triggers[trigger.name] = trigger
++        logger.info("Registered automation trigger", extra={"trigger_name": trigger.name})
++
++    def get(self, name: str) -> Trigger:
++        """Return a registered trigger by name.
++
++        Raises:
++            UnknownTriggerError: If no trigger with that name is registered.
++        """
++        try:
++            return self._triggers[name]
++        except KeyError as exc:
++            raise UnknownTriggerError(f"Unknown trigger '{name}'") from exc
++
++    def all(self) -> list[Trigger]:
++        """Return all registered triggers."""
++        return list(self._triggers.values())
++
++    def matching(self, event: Event) -> list[Trigger]:
++        """Return the triggers that match the given event."""
++        return [trigger for trigger in self._triggers.values() if trigger.matches(event)]
+\ No newline at end of file
+diff --git a/tests/automation/test_automation.py b/tests/automation/test_automation.py
+new file mode 100644
+index 0000000..e824e91
+--- /dev/null
++++ b/tests/automation/test_automation.py
+@@ -0,0 +1,191 @@
++from __future__ import annotations
++
++import logging
++
++import pytest
++
++from app.automation.actions import ActionRegistry, GoWASendMediaAction
++from app.automation.engine import AutomationEngine
++from app.automation.exceptions import ActionError, UnknownActionError, UnknownTriggerError
++from app.automation.triggers import EventTrigger, TriggerRegistry
++from app.events import EventBroker
++from app.events.event import Event
++
++
++@pytest.mark.anyio
++async def test_event_trigger_matches_by_event_name() -> None:
++    trigger = EventTrigger(name="on-dispatch", event_name="pipeline.dispatch_completed")
++    event = Event(name="pipeline.dispatch_completed", payload={"session_id": "s-1"})
++
++    assert trigger.matches(event) is True
++    assert trigger.matches(Event(name="pipeline.dispatch_started")) is False
++
++
++def test_trigger_registry_register_get_all() -> None:
++    registry = TriggerRegistry()
++    trigger = EventTrigger(name="on-dispatch", event_name="pipeline.dispatch_completed")
++    registry.register(trigger)
++
++    assert registry.get("on-dispatch") is trigger
++    assert registry.all() == [trigger]
++
++
++def test_trigger_registry_duplicate_raises() -> None:
++    registry = TriggerRegistry()
++    registry.register(EventTrigger(name="dup", event_name="a"))
++
++    with pytest.raises(ValueError):
++        registry.register(EventTrigger(name="dup", event_name="b"))
++
++
++def test_trigger_registry_unknown_raises() -> None:
++    registry = TriggerRegistry()
++
++    with pytest.raises(UnknownTriggerError):
++        registry.get("missing")
++
++
++def test_trigger_registry_matching_filters() -> None:
++    registry = TriggerRegistry()
++    registry.register(EventTrigger(name="a", event_name="event.a"))
++    registry.register(EventTrigger(name="b", event_name="event.b"))
++
++    matches = registry.matching(Event(name="event.a"))
++
++    assert [t.name for t in matches] == ["a"]
++
++
++def test_action_registry_register_get_all() -> None:
++    registry = ActionRegistry()
++    action = GoWASendMediaAction(service=None)
++    registry.register(action)
++
++    assert registry.get("gowa.send_media") is action
++    assert registry.all() == [action]
++
++
++def test_action_registry_duplicate_raises() -> None:
++    registry = ActionRegistry()
++    registry.register(GoWASendMediaAction(service=None))
++
++    with pytest.raises(ValueError):
++        registry.register(GoWASendMediaAction(service=None))
++
++
++def test_action_registry_unknown_raises() -> None:
++    registry = ActionRegistry()
++
++    with pytest.raises(UnknownActionError):
++        registry.get("missing")
++
++
++@pytest.mark.anyio
++async def test_gowa_send_media_action_missing_payload_field() -> None:
++    action = GoWASendMediaAction(service=None)
++    payload = {
++        "chat_id": "c-1",
++        "storage_key": "key",
++        "metadata": {"type": "photo", "mime_type": "image/png", "size": 10, "sha256": "abc"},
++    }
++
++    with pytest.raises(ActionError, match="device_id"):
++        await action.execute(payload)
++
++
++@pytest.mark.anyio
++async def test_gowa_send_media_action_invalid_media_type() -> None:
++    action = GoWASendMediaAction(service=None)
++    payload = {
++        "device_id": "d-1",
++        "chat_id": "c-1",
++        "storage_key": "key",
++        "metadata": {"type": "unknown", "mime_type": "image/png", "size": 10, "sha256": "abc"},
++    }
++
++    with pytest.raises(ActionError, match="Unsupported media type"):
++        await action.execute(payload)
++
++
++@pytest.mark.anyio
++async def test_engine_fires_trigger_and_runs_actions() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation"))
++    engine = AutomationEngine(broker=broker)
++    engine.triggers.register(EventTrigger(name="on-dispatch", event_name="pipeline.dispatch_completed"))
++
++    executed: list[str] = []
++
++    class FakeAction:
++        name = "fake.action"
++
++        async def execute(self, payload: dict) -> dict:
++            executed.append(payload["session_id"])
++            return {"ok": True}
++
++    engine.actions.register(FakeAction())
++
++    published: list[str] = []
++    original_publish = broker.publish
++
++    async def capture(event) -> None:
++        published.append(event.name)
++        await original_publish(event)
++
++    broker.publish = capture  # type: ignore[method-assign]
++
++    await engine._on_event(Event(name="pipeline.dispatch_completed", payload={"session_id": "s-1"}))
++
++    assert executed == ["s-1"]
++    assert "automation.triggered" in published
++    assert "automation.action_started" in published
++    assert "automation.action_completed" in published
++
++
++@pytest.mark.anyio
++async def test_engine_publishes_failed_event_on_action_error() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation"))
++    engine = AutomationEngine(broker=broker)
++    engine.triggers.register(EventTrigger(name="on-dispatch", event_name="pipeline.dispatch_completed"))
++
++    class FailingAction:
++        name = "failing.action"
++
++        async def execute(self, payload: dict) -> dict:
++            raise ActionError("boom")
++
++    engine.actions.register(FailingAction())
++
++    published: list[str] = []
++    original_publish = broker.publish
++
++    async def capture(event) -> None:
++        published.append(event.name)
++        await original_publish(event)
++
++    broker.publish = capture  # type: ignore[method-assign]
++
++    await engine._on_event(Event(name="pipeline.dispatch_completed", payload={"session_id": "s-1"}))
++
++    assert "automation.action_failed" in published
++    assert "automation.action_completed" not in published
++
++
++@pytest.mark.anyio
++async def test_engine_ignores_non_matching_events() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation"))
++    engine = AutomationEngine(broker=broker)
++    engine.triggers.register(EventTrigger(name="on-dispatch", event_name="pipeline.dispatch_completed"))
++
++    executed: list[str] = []
++
++    class FakeAction:
++        name = "fake.action"
++
++        async def execute(self, payload: dict) -> dict:
++            executed.append("ran")
++            return {}
++
++    engine.actions.register(FakeAction())
++
++    await engine._on_event(Event(name="pipeline.dispatch_started", payload={}))
++
++    assert executed == []
+\ No newline at end of file

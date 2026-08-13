@@ -1,0 +1,1177 @@
+diff --git a/app/automation/__init__.py b/app/automation/__init__.py
+index bbde79e..09bc816 100644
+--- a/app/automation/__init__.py
++++ b/app/automation/__init__.py
+@@ -1,14 +1,14 @@
+-"""Automation Engine — triggers and actions (Epic A2).
++"""Automation Engine — triggers, actions, workflows and scheduling (Epics A2/A3).
+ 
+-This package provides the foundation of the Automation Engine:
++This package provides the Automation Engine foundation:
+ 
+-- ``Trigger`` / ``TriggerRegistry`` — detect domain events.
+-- ``Action`` / ``ActionRegistry`` — execute side effects (e.g. GoWA media send).
++- ``Trigger`` / ``TriggerRegistry`` — detect domain events (Epic A2).
++- ``Action`` / ``ActionRegistry`` — execute side effects (e.g. GoWA media send) (Epic A2).
+ - ``AutomationEngine`` — subscribes to the event broker, fires triggers and
+-  runs the actions bound to each trigger.
+-
+-Scheduling, workflows and conditions are intentionally out of scope for this
+-epic and will be delivered by Epic A3.
++  runs the actions bound to each trigger (Epic A2).
++- ``Workflow`` / ``WorkflowRegistry`` / ``WorkflowExecutor`` — run ordered
++  action sequences gated by conditions (Epic A3).
++- ``Scheduler`` / ``ScheduleRegistry`` — run workflows on a schedule (Epic A3).
+ """
+ 
+ from app.automation.actions import Action, ActionRegistry, GoWASendMediaAction
+@@ -26,7 +26,40 @@ from app.automation.exceptions import (
+     UnknownActionError,
+     UnknownTriggerError,
+ )
++from app.automation.scheduler import (
++    DailySchedule,
++    IntervalSchedule,
++    ScheduleError,
++    ScheduleRegistry,
++    ScheduledRunCompleted,
++    ScheduledRunStarted,
++    ScheduledWorkflow,
++    Scheduler,
++    UnknownScheduleError,
++)
+ from app.automation.triggers import EventTrigger, Trigger, TriggerRegistry
++from app.automation.workflows import (
++    ConditionError,
++    ConditionRegistry,
++    FieldEquals,
++    FieldExists,
++    UnknownConditionError,
++    UnknownWorkflowError,
++    WorkflowCompleted,
++    WorkflowError,
++    WorkflowExecutor,
++    WorkflowFailed,
++    WorkflowManager,
++    WorkflowRegistry,
++    WorkflowRunResult,
++    WorkflowSpec,
++    WorkflowStarted,
++    WorkflowStep,
++    WorkflowStepCompleted,
++    WorkflowStepFailed,
++    WorkflowStepSkipped,
++    WorkflowStepStarted,
++)
+ 
+ __all__ = [
+     "Action",
+@@ -38,11 +71,40 @@ __all__ = [
+     "AutomationEngine",
+     "AutomationError",
+     "AutomationTriggered",
++    "ConditionError",
++    "ConditionRegistry",
++    "DailySchedule",
+     "EventTrigger",
++    "FieldEquals",
++    "FieldExists",
+     "GoWASendMediaAction",
++    "IntervalSchedule",
++    "ScheduleError",
++    "ScheduleRegistry",
++    "ScheduledRunCompleted",
++    "ScheduledRunStarted",
++    "ScheduledWorkflow",
++    "Scheduler",
+     "Trigger",
+     "TriggerError",
+     "TriggerRegistry",
+     "UnknownActionError",
++    "UnknownConditionError",
++    "UnknownScheduleError",
+     "UnknownTriggerError",
++    "UnknownWorkflowError",
++    "WorkflowCompleted",
++    "WorkflowError",
++    "WorkflowExecutor",
++    "WorkflowFailed",
++    "WorkflowManager",
++    "WorkflowRegistry",
++    "WorkflowRunResult",
++    "WorkflowSpec",
++    "WorkflowStarted",
++    "WorkflowStep",
++    "WorkflowStepCompleted",
++    "WorkflowStepFailed",
++    "WorkflowStepSkipped",
++    "WorkflowStepStarted",
+ ]
+\ No newline at end of file
+diff --git a/app/automation/scheduler.py b/app/automation/scheduler.py
+new file mode 100644
+index 0000000..ac7a9fa
+--- /dev/null
++++ b/app/automation/scheduler.py
+@@ -0,0 +1,279 @@
++"""Scheduler for the Automation Engine (Epic A3).
++
++The scheduler runs registered workflows on a schedule. Schedules are described
++declaratively (interval or daily wall-clock) and are evaluated against an
++injectable clock so behaviour is fully deterministic in tests.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import logging
++from dataclasses import dataclass, field
++from datetime import datetime, time, timedelta
++from typing import Any, Protocol
++
++from app.automation.exceptions import AutomationError
++from app.automation.workflows import WorkflowExecutor
++from app.events.broker import EventBroker
++from app.events.event import Event
++
++logger = logging.getLogger("app.automation.scheduler")
++
++
++# --- Exceptions -----------------------------------------------------------
++class ScheduleError(AutomationError):
++    """Raised when a scheduled run cannot be evaluated or registered."""
++
++
++class UnknownScheduleError(ScheduleError):
++    """Raised when a schedule name is not registered."""
++
++
++# --- Domain events --------------------------------------------------------
++class ScheduledRunStarted(Event):
++    """Emitted when the scheduler begins running a scheduled workflow."""
++
++    def __init__(self, *, schedule_name: str, workflow_name: str, run_id: str) -> None:
++        super().__init__(
++            name="automation.scheduled_run_started",
++            payload={"schedule_name": schedule_name, "workflow_name": workflow_name, "run_id": run_id},
++        )
++
++
++class ScheduledRunCompleted(Event):
++    """Emitted when the scheduler finishes running a scheduled workflow."""
++
++    def __init__(self, *, schedule_name: str, workflow_name: str, run_id: str, status: str) -> None:
++        super().__init__(
++            name="automation.scheduled_run_completed",
++            payload={
++                "schedule_name": schedule_name,
++                "workflow_name": workflow_name,
++                "run_id": run_id,
++                "status": status,
++            },
++        )
++
++
++class ScheduleRegistered(Event):
++    """Emitted when a schedule is registered."""
++
++    def __init__(self, *, schedule_name: str, workflow_name: str) -> None:
++        super().__init__(
++            name="automation.schedule_registered",
++            payload={"schedule_name": schedule_name, "workflow_name": workflow_name},
++        )
++
++
++# --- Clock ----------------------------------------------------------------
++class Clock(Protocol):
++    """Abstraction over time used by the scheduler."""
++
++    def now(self) -> datetime:
++        """Return the current UTC datetime."""
++        ...
++
++
++@dataclass(frozen=True, slots=True)
++class SystemClock:
++    """The real system clock."""
++
++    def now(self) -> datetime:
++        from datetime import UTC
++
++        return datetime.now(UTC)
++
++
++# --- Schedules ------------------------------------------------------------
++@dataclass(frozen=True, slots=True)
++class IntervalSchedule:
++    """Run every ``seconds`` seconds.
++
++    Args:
++        seconds: Interval between runs in seconds.
++    """
++
++    seconds: float
++
++    def next_after(self, now: datetime) -> datetime:
++        return now + timedelta(seconds=self.seconds)
++
++    def run_at(self, now: datetime) -> bool:
++        return False
++
++
++@dataclass(frozen=True, slots=True)
++class DailySchedule:
++    """Run once per day at ``at`` (UTC).
++
++    Args:
++        at: Local wall-clock time of day to run at.
++    """
++
++    at: time
++
++    def next_after(self, now: datetime) -> datetime:
++        candidate = datetime.combine(now.date(), self.at, tzinfo=now.tzinfo)
++        if candidate <= now:
++            candidate += timedelta(days=1)
++        return candidate
++
++    def run_at(self, now: datetime) -> bool:
++        return now.time() == self.at
++
++
++class Schedule(Protocol):
++    """Interface implemented by schedules."""
++
++    def next_after(self, now: datetime) -> datetime:
++        """Return the next datetime the schedule should fire at or after ``now``."""
++        ...
++
++    def run_at(self, now: datetime) -> bool:
++        """Return True when the schedule should run at ``now``."""
++        ...
++
++
++# --- Registry -------------------------------------------------------------
++@dataclass(frozen=True, slots=True)
++class ScheduledWorkflow:
++    """A workflow bound to a schedule.
++
++    Args:
++        name: Unique schedule name used for registration.
++        workflow_name: Name of the registered workflow to run.
++        schedule: The schedule that governs when the workflow runs.
++        payload: Static payload merged into each scheduled run.
++    """
++
++    name: str
++    workflow_name: str
++    schedule: Schedule
++    payload: dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class ScheduleRegistry:
++    """Registry of named scheduled workflows."""
++
++    _schedules: dict[str, ScheduledWorkflow] = field(default_factory=dict)
++
++    def register(self, scheduled: ScheduledWorkflow) -> None:
++        """Register a scheduled workflow by its name.
++
++        Args:
++            scheduled: The scheduled workflow to register.
++
++        Raises:
++            ValueError: If a schedule with the same name is already registered.
++        """
++        if scheduled.name in self._schedules:
++            raise ValueError(f"Schedule '{scheduled.name}' is already registered")
++        self._schedules[scheduled.name] = scheduled
++        logger.info("Registered automation schedule", extra={"schedule_name": scheduled.name})
++
++    def get(self, name: str) -> ScheduledWorkflow:
++        """Return a registered scheduled workflow by name.
++
++        Raises:
++            UnknownScheduleError: If no schedule with that name is registered.
++        """
++        try:
++            return self._schedules[name]
++        except KeyError as exc:
++            raise UnknownScheduleError(f"Unknown schedule '{name}'") from exc
++
++    def all(self) -> list[ScheduledWorkflow]:
++        """Return all registered scheduled workflows."""
++        return list(self._schedules.values())
++
++
++# --- Scheduler ------------------------------------------------------------
++@dataclass
++class Scheduler:
++    """Runs registered workflows on a schedule.
++
++    Args:
++        schedules: Registry of scheduled workflows.
++        executor: Executor used to run workflows.
++        broker: Optional event broker; when provided, scheduling domain
++            events are published for every run.
++        clock: Clock used to evaluate schedules; defaults to the real clock.
++        interval: Polling interval in seconds used to detect due runs.
++    """
++
++    schedules: ScheduleRegistry
++    executor: WorkflowExecutor
++    broker: EventBroker | None = None
++    clock: Clock | None = None
++    interval: float = 1.0
++
++    def __post_init__(self) -> None:
++        self._clock = self.clock or SystemClock()
++        self._task: asyncio.Task[None] | None = None
++        self._stop_event: asyncio.Event | None = None
++        self._next_run: dict[str, datetime] = {}
++
++    def start(self) -> None:
++        """Start the scheduler loop in the current event loop."""
++        if self._task is not None and not self._task.done():
++            return
++        self._stop_event = asyncio.Event()
++        self._task = asyncio.create_task(self._run_loop())
++
++    async def stop(self) -> None:
++        """Stop the scheduler loop and await its completion."""
++        if self._stop_event is not None:
++            self._stop_event.set()
++        if self._task is not None:
++            await self._task
++        self._task = None
++        self._stop_event = None
++
++    async def _run_loop(self) -> None:
++        assert self._stop_event is not None
++        while True:
++            now = self._clock.now()
++            for scheduled in self.schedules.all():
++                if self._is_due(scheduled, now):
++                    await self.run(scheduled.name)
++            try:
++                await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)
++            except asyncio.TimeoutError:
++                pass
++            if self._stop_event.is_set():
++                break
++
++    def _is_due(self, scheduled: ScheduledWorkflow, now: datetime) -> bool:
++        last = self._next_run.get(scheduled.name)
++        try:
++            next_at = scheduled.schedule.next_after(last) if last is not None else now
++        except Exception as exc:
++            logger.warning(
++                "Schedule evaluation failed",
++                extra={"schedule_name": scheduled.name, "error": str(exc)},
++            )
++            return False
++        if next_at <= now:
++            self._next_run[scheduled.name] = now
++            return True
++        return False
++
++    async def run(self, schedule_name: str) -> None:
++        """Run the workflow bound to a schedule now.
++
++        Args:
++            schedule_name: Name of the registered scheduled workflow.
++        """
++        scheduled = self.schedules.get(schedule_name)
++        result = await self.executor.execute(scheduled.workflow_name, scheduled.payload)
++        if self.broker is not None:
++            await self.broker.publish(
++                ScheduledRunCompleted(
++                    schedule_name=scheduled.name,
++                    workflow_name=scheduled.workflow_name,
++                    run_id=result.run_id,
++                    status=result.status,
++                )
++            )
+diff --git a/app/automation/workflows.py b/app/automation/workflows.py
+new file mode 100644
+index 0000000..277142e
+--- /dev/null
++++ b/app/automation/workflows.py
+@@ -0,0 +1,433 @@
++"""Workflows, conditions and the workflow executor (Epic A3).
++
++A workflow is a defined sequence of steps. Each step runs an action from the
++:class:`~app.automation.actions.ActionRegistry` and may be gated by a condition
++from the :class:`ConditionRegistry`. The :class:`WorkflowExecutor` executes a
++workflow step by step and publishes domain events for every transition.
++"""
++
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from typing import Any, Protocol
++from uuid import uuid4
++
++from app.automation.actions import ActionRegistry
++from app.automation.exceptions import AutomationError
++from app.automation.triggers import TriggerRegistry
++from app.events.broker import EventBroker
++from app.events.event import Event
++
++logger = logging.getLogger("app.automation.workflows")
++
++
++# --- Exceptions -----------------------------------------------------------
++class WorkflowError(AutomationError):
++    """Base error for workflow execution."""
++
++
++class ConditionError(WorkflowError):
++    """Raised when a condition cannot be evaluated or registered."""
++
++
++class UnknownWorkflowError(WorkflowError):
++    """Raised when a workflow name is not registered."""
++
++
++class UnknownConditionError(ConditionError):
++    """Raised when a condition name is not registered."""
++
++
++# --- Domain events --------------------------------------------------------
++class WorkflowStarted(Event):
++    """Emitted when a workflow run begins."""
++
++    def __init__(self, *, workflow_name: str, run_id: str) -> None:
++        super().__init__(
++            name="automation.workflow_started",
++            payload={"workflow_name": workflow_name, "run_id": run_id},
++        )
++
++
++class WorkflowStepStarted(Event):
++    """Emitted when a workflow step begins executing."""
++
++    def __init__(self, *, workflow_name: str, step_name: str, run_id: str) -> None:
++        super().__init__(
++            name="automation.workflow_step_started",
++            payload={"workflow_name": workflow_name, "step_name": step_name, "run_id": run_id},
++        )
++
++
++class WorkflowStepSkipped(Event):
++    """Emitted when a workflow step is skipped because its condition failed."""
++
++    def __init__(self, *, workflow_name: str, step_name: str, run_id: str) -> None:
++        super().__init__(
++            name="automation.workflow_step_skipped",
++            payload={"workflow_name": workflow_name, "step_name": step_name, "run_id": run_id},
++        )
++
++
++class WorkflowStepCompleted(Event):
++    """Emitted when a workflow step finishes successfully."""
++
++    def __init__(self, *, workflow_name: str, step_name: str, run_id: str, result: dict[str, Any]) -> None:
++        super().__init__(
++            name="automation.workflow_step_completed",
++            payload={
++                "workflow_name": workflow_name,
++                "step_name": step_name,
++                "run_id": run_id,
++                "result": result,
++            },
++        )
++
++
++class WorkflowStepFailed(Event):
++    """Emitted when a workflow step raises an error."""
++
++    def __init__(self, *, workflow_name: str, step_name: str, run_id: str, error: str) -> None:
++        super().__init__(
++            name="automation.workflow_step_failed",
++            payload={
++                "workflow_name": workflow_name,
++                "step_name": step_name,
++                "run_id": run_id,
++                "error": error,
++            },
++        )
++
++
++class WorkflowCompleted(Event):
++    """Emitted when a workflow run finishes all its steps successfully."""
++
++    def __init__(self, *, workflow_name: str, run_id: str, results: list[dict[str, Any]]) -> None:
++        super().__init__(
++            name="automation.workflow_completed",
++            payload={"workflow_name": workflow_name, "run_id": run_id, "results": results},
++        )
++
++
++class WorkflowFailed(Event):
++    """Emitted when a workflow run aborts because a step failed."""
++
++    def __init__(self, *, workflow_name: str, run_id: str, error: str) -> None:
++        super().__init__(
++            name="automation.workflow_failed",
++            payload={"workflow_name": workflow_name, "run_id": run_id, "error": error},
++        )
++
++
++# --- Conditions -----------------------------------------------------------
++class Condition(Protocol):
++    """Interface implemented by workflow conditions."""
++
++    name: str
++
++    def evaluate(self, payload: dict[str, Any]) -> bool:
++        """Return True when the step guarded by this condition should run."""
++        ...
++
++
++@dataclass(frozen=True, slots=True)
++class FieldEquals:
++    """True when ``payload[path]`` equals ``value``.
++
++    Args:
++        name: Unique condition name used for registration.
++        path: Payload key to inspect.
++        value: Expected value.
++    """
++
++    name: str
++    path: str
++    value: Any
++
++    def evaluate(self, payload: dict[str, Any]) -> bool:
++        return payload.get(self.path) == self.value
++
++
++@dataclass(frozen=True, slots=True)
++class FieldExists:
++    """True when ``payload[path]`` is present and not None.
++
++    Args:
++        name: Unique condition name used for registration.
++        path: Payload key to inspect.
++    """
++
++    name: str
++    path: str
++
++    def evaluate(self, payload: dict[str, Any]) -> bool:
++        value = payload.get(self.path)
++        return value is not None
++
++
++@dataclass
++class ConditionRegistry:
++    """Registry of named conditions."""
++
++    _conditions: dict[str, Condition] = field(default_factory=dict)
++
++    def register(self, condition: Condition) -> None:
++        """Register a condition by its name.
++
++        Args:
++            condition: The condition to register.
++
++        Raises:
++            ValueError: If a condition with the same name is already registered.
++        """
++        if condition.name in self._conditions:
++            raise ValueError(f"Condition '{condition.name}' is already registered")
++        self._conditions[condition.name] = condition
++        logger.info("Registered automation condition", extra={"condition_name": condition.name})
++
++    def get(self, name: str) -> Condition:
++        """Return a registered condition by name.
++
++        Raises:
++            UnknownConditionError: If no condition with that name is registered.
++        """
++        try:
++            return self._conditions[name]
++        except KeyError as exc:
++            raise UnknownConditionError(f"Unknown condition '{name}'") from exc
++
++    def all(self) -> list[Condition]:
++        """Return all registered conditions."""
++        return list(self._conditions.values())
++
++
++# --- Workflows ------------------------------------------------------------
++@dataclass(frozen=True, slots=True)
++class WorkflowStep:
++    """A single step in a workflow.
++
++    Args:
++        name: Unique step name within the workflow.
++        action_name: Name of the action to execute (see ``ActionRegistry``).
++        condition: Optional name of a condition that gates this step.
++        input: Extra payload keys merged over the event payload before the
++            action executes. Workflow nodes store only device/chat references;
++            connection credentials never appear here.
++    """
++
++    name: str
++    action_name: str
++    condition: str | None = None
++    input: dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass(frozen=True, slots=True)
++class WorkflowSpec:
++    """A defined sequence of steps.
++
++    Args:
++        name: Unique workflow name used for registration and scheduling.
++        steps: The ordered steps of the workflow.
++        description: Optional human-readable description.
++    """
++
++    name: str
++    steps: tuple[WorkflowStep, ...]
++    description: str = ""
++
++
++@dataclass(frozen=True, slots=True)
++class WorkflowRunResult:
++    """Outcome of a single workflow run."""
++
++    run_id: str
++    workflow_name: str
++    status: str
++    steps: list[dict[str, Any]] = field(default_factory=list)
++    error: str | None = None
++
++
++@dataclass
++class WorkflowRegistry:
++    """Registry of named workflows."""
++
++    _workflows: dict[str, WorkflowSpec] = field(default_factory=dict)
++
++    def register(self, workflow: WorkflowSpec) -> None:
++        """Register a workflow by its name.
++
++        Args:
++            workflow: The workflow to register.
++
++        Raises:
++            ValueError: If a workflow with the same name is already registered.
++        """
++        if workflow.name in self._workflows:
++            raise ValueError(f"Workflow '{workflow.name}' is already registered")
++        self._workflows[workflow.name] = workflow
++        logger.info("Registered automation workflow", extra={"workflow_name": workflow.name})
++
++    def get(self, name: str) -> WorkflowSpec:
++        """Return a registered workflow by name.
++
++        Raises:
++            UnknownWorkflowError: If no workflow with that name is registered.
++        """
++        try:
++            return self._workflows[name]
++        except KeyError as exc:
++            raise UnknownWorkflowError(f"Unknown workflow '{name}'") from exc
++
++    def all(self) -> list[WorkflowSpec]:
++        """Return all registered workflows."""
++        return list(self._workflows.values())
++
++
++@dataclass
++class WorkflowExecutor:
++    """Executes workflows step by step.
++
++    Args:
++        workflows: Registry of workflow definitions.
++        actions: Registry of actions executed by steps.
++        conditions: Registry of conditions gating steps.
++        broker: Optional event broker; when provided, workflow domain events
++            are published for every transition.
++    """
++
++    workflows: WorkflowRegistry
++    actions: ActionRegistry
++    conditions: ConditionRegistry = field(default_factory=ConditionRegistry)
++    broker: EventBroker | None = None
++
++    async def execute(self, workflow_name: str, payload: dict[str, Any]) -> WorkflowRunResult:
++        """Run a registered workflow against a payload.
++
++        Steps run in order. A step guarded by a condition is skipped when the
++        condition evaluates to False. When a step fails, the run aborts and a
++        ``WorkflowFailed`` event (if a broker is present) is published.
++
++        Args:
++            workflow_name: Name of the registered workflow to run.
++            payload: The event payload that started this run.
++
++        Returns:
++            A :class:`WorkflowRunResult` describing the run outcome.
++        """
++        spec = self.workflows.get(workflow_name)
++        run_id = uuid4().hex
++        await self._publish(WorkflowStarted(workflow_name=spec.name, run_id=run_id))
++
++        results: list[dict[str, Any]] = []
++        for step in spec.steps:
++            if step.condition is not None:
++                try:
++                    gated = self.conditions.get(step.condition).evaluate(payload)
++                except ConditionError as exc:
++                    return await self._fail(
++                        workflow_name=spec.name,
++                        run_id=run_id,
++                        step_name=step.name,
++                        results=results,
++                        error=str(exc),
++                    )
++                if not gated:
++                    await self._publish(
++                        WorkflowStepSkipped(workflow_name=spec.name, step_name=step.name, run_id=run_id)
++                    )
++                    results.append({"name": step.name, "status": "skipped"})
++                    continue
++
++            await self._publish(
++                WorkflowStepStarted(workflow_name=spec.name, step_name=step.name, run_id=run_id)
++            )
++            try:
++                action = self.actions.get(step.action_name)
++                result = await action.execute({**payload, **step.input})
++            except AutomationError as exc:
++                return await self._fail(
++                    workflow_name=spec.name,
++                    run_id=run_id,
++                    step_name=step.name,
++                    results=results,
++                    error=str(exc),
++                )
++            await self._publish(
++                WorkflowStepCompleted(
++                    workflow_name=spec.name, step_name=step.name, run_id=run_id, result=result
++                )
++            )
++            results.append({"name": step.name, "status": "completed", "result": result})
++
++        await self._publish(WorkflowCompleted(workflow_name=spec.name, run_id=run_id, results=results))
++        return WorkflowRunResult(run_id=run_id, workflow_name=spec.name, status="completed", steps=results)
++
++    async def _fail(
++        self,
++        *,
++        workflow_name: str,
++        run_id: str,
++        step_name: str,
++        results: list[dict[str, Any]],
++        error: str,
++    ) -> WorkflowRunResult:
++        await self._publish(
++            WorkflowStepFailed(workflow_name=workflow_name, step_name=step_name, run_id=run_id, error=error)
++        )
++        await self._publish(WorkflowFailed(workflow_name=workflow_name, run_id=run_id, error=error))
++        self.logger.warning(
++            "Workflow step failed",
++            extra={"workflow_name": workflow_name, "step_name": step_name, "run_id": run_id, "error": error},
++        )
++        return WorkflowRunResult(run_id=run_id, workflow_name=workflow_name, status="failed", steps=results, error=error)
++
++    async def _publish(self, event: Event) -> None:
++        if self.broker is not None:
++            await self.broker.publish(event)
++
++    @property
++    def logger(self) -> logging.Logger:
++        return logger
++
++
++@dataclass
++class WorkflowManager:
++    """Bridges automation trigger events to workflow runs (Epic A3).
++
++    The manager subscribes to the event broker, feeds each incoming event to
++    the registered triggers, and runs the workflow bound to each matching
++    trigger. It reuses the A2 :class:`~app.automation.triggers.TriggerRegistry`
++    and :class:`~app.automation.triggers.EventTrigger`.
++    """
++
++    broker: EventBroker
++    executor: WorkflowExecutor
++    triggers: TriggerRegistry = field(default_factory=TriggerRegistry)
++    _binding: dict[str, str] = field(default_factory=dict)
++
++    def __post_init__(self) -> None:
++        self._subscription_name = "automation.workflow_manager"
++
++    def bind(self, trigger, workflow_name: str) -> None:
++        """Register a trigger and bind it to a workflow.
++
++        Args:
++            trigger: An :class:`~app.automation.triggers.EventTrigger`.
++            workflow_name: Name of the registered workflow to run when the
++                trigger fires.
++        """
++        self.triggers.register(trigger)
++        self._binding[trigger.name] = workflow_name
++
++    def subscribe(self) -> None:
++        """Subscribe the manager to the event broker."""
++        self.broker.subscribe(Event, self._on_event, name=self._subscription_name)
++
++    async def _on_event(self, event: Event) -> None:
++        """Run the workflow bound to every matching trigger."""
++        for trigger in self.triggers.matching(event):
++            workflow_name = self._binding.get(trigger.name)
++            if workflow_name is None:
++                continue
++            await self.executor.execute(workflow_name, event.payload)
+\ No newline at end of file
+diff --git a/tests/automation/test_workflows.py b/tests/automation/test_workflows.py
+new file mode 100644
+index 0000000..8cf686e
+--- /dev/null
++++ b/tests/automation/test_workflows.py
+@@ -0,0 +1,336 @@
++"""Behavioural tests for the Automation Engine workflows (Epic A3)."""
++
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++import pytest
++
++from app.automation.actions import Action, ActionRegistry
++from app.automation.exceptions import AutomationError
++from app.automation.triggers import EventTrigger, TriggerRegistry
++from app.automation.workflows import (
++    ConditionRegistry,
++    FieldEquals,
++    FieldExists,
++    UnknownConditionError,
++    UnknownWorkflowError,
++    WorkflowError,
++    WorkflowExecutor,
++    WorkflowManager,
++    WorkflowRegistry,
++    WorkflowSpec,
++    WorkflowStep,
++)
++from app.events import EventBroker
++from app.events.event import Event
++
++
++# --- Helpers --------------------------------------------------------------
++class RecordingAction:
++    """Action that records every payload it executes."""
++
++    def __init__(self, name: str = "recording.action") -> None:
++        self.name = name
++        self.calls: list[dict[str, Any]] = []
++
++    async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
++        self.calls.append(payload)
++        return {"called": self.name}
++
++
++def make_executor(**kwargs) -> WorkflowExecutor:
++    """Build a workflow executor with fresh registries."""
++    return WorkflowExecutor(
++        workflows=WorkflowRegistry(),
++        actions=ActionRegistry(),
++        conditions=ConditionRegistry(),
++        **kwargs,
++    )
++
++
++def sample_workflow(name: str = "w") -> WorkflowSpec:
++    return WorkflowSpec(
++        name=name,
++        steps=(
++            WorkflowStep(name="first", action_name="recording.action", input={"step": "first"}),
++            WorkflowStep(name="second", action_name="recording.action", input={"step": "second"}),
++        ),
++    )
++
++
++# --- Registry -------------------------------------------------------------
++def test_workflow_registry_register_get_all() -> None:
++    registry = WorkflowRegistry()
++    workflow = sample_workflow()
++    registry.register(workflow)
++
++    assert registry.get("w") is workflow
++    assert registry.all() == [workflow]
++
++
++def test_workflow_registry_duplicate_raises() -> None:
++    registry = WorkflowRegistry()
++    registry.register(sample_workflow())
++
++    with pytest.raises(ValueError):
++        registry.register(sample_workflow())
++
++
++def test_workflow_registry_unknown_raises() -> None:
++    registry = WorkflowRegistry()
++
++    with pytest.raises(UnknownWorkflowError):
++        registry.get("missing")
++
++
++# --- Conditions -----------------------------------------------------------
++def test_field_equals_matches_payload_value() -> None:
++    condition = FieldEquals(name="media_is_photo", path="type", value="photo")
++
++    assert condition.evaluate({"type": "photo"}) is True
++    assert condition.evaluate({"type": "document"}) is False
++    assert condition.evaluate({}) is False
++
++
++def test_field_exists_matches_payload_value() -> None:
++    condition = FieldExists(name="has_session", path="session_id")
++
++    assert condition.evaluate({"session_id": "s-1"}) is True
++    assert condition.evaluate({"session_id": None}) is False
++    assert condition.evaluate({}) is False
++
++
++def test_condition_registry_registers_custom_condition() -> None:
++    registry = ConditionRegistry()
++    condition = FieldEquals(name="media_is_photo", path="type", value="photo")
++    registry.register(condition)
++
++    assert registry.get("media_is_photo") is condition
++    assert registry.get("media_is_photo").name == "media_is_photo"
++    assert registry.all() == [condition]
++
++
++def test_condition_registry_duplicate_raises() -> None:
++    registry = ConditionRegistry()
++    registry.register(FieldEquals(name="field_equals", path="type", value="photo"))
++
++    with pytest.raises(ValueError):
++        registry.register(FieldEquals(name="field_equals", path="type", value="document"))
++
++
++def test_condition_registry_unknown_raises() -> None:
++    registry = ConditionRegistry()
++
++    with pytest.raises(UnknownConditionError):
++        registry.get("missing")
++
++
++# --- Executor -------------------------------------------------------------
++@pytest.mark.anyio
++async def test_executor_runs_steps_in_order_with_payload() -> None:
++    executor = make_executor()
++    action = RecordingAction()
++    executor.actions.register(action)
++    executor.workflows.register(sample_workflow())
++
++    result = await executor.execute("w", {"event": "data"})
++
++    assert result.workflow_name == "w"
++    assert result.status == "completed"
++    assert result.error is None
++    assert result.run_id
++    assert [c["step"] for c in action.calls] == ["first", "second"]
++    assert all(c["event"] == "data" for c in action.calls)
++    assert [s["name"] for s in result.steps] == ["first", "second"]
++    assert all(s["status"] == "completed" for s in result.steps)
++    assert result.steps[0]["result"]["called"] == "recording.action"
++    assert result.steps[1]["result"]["called"] == "recording.action"
++
++
++@pytest.mark.anyio
++async def test_executor_halts_on_step_failure_and_reports_failure() -> None:
++    executor = make_executor()
++    first = RecordingAction("first.action")
++
++    class FailingAction(RecordingAction):
++        def __init__(self) -> None:
++            super().__init__("failing.action")
++
++        async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
++            raise WorkflowError("step exploded")
++
++    executor.actions.register(first)
++    executor.actions.register(FailingAction())
++    executor.workflows.register(
++        WorkflowSpec(
++            name="w",
++            steps=(
++                WorkflowStep(name="first", action_name="first.action", input={}),
++                WorkflowStep(name="second", action_name="failing.action", input={}),
++            ),
++        )
++    )
++
++    result = await executor.execute("w", {})
++
++    assert result.status == "failed"
++    assert result.error == "step exploded"
++    assert [s["name"] for s in result.steps] == ["first"]  # halts after failure
++    assert len(first.calls) == 1
++
++
++@pytest.mark.anyio
++async def test_executor_skips_step_when_condition_false() -> None:
++    executor = make_executor()
++    run = RecordingAction("run.action")
++    skip = RecordingAction("skip.action")
++    executor.actions.register(run)
++    executor.actions.register(skip)
++    executor.conditions.register(FieldEquals(name="only_photo", path="type", value="photo"))
++    executor.workflows.register(
++        WorkflowSpec(
++            name="w",
++            steps=(
++                WorkflowStep(name="always", action_name="run.action", input={}),
++                WorkflowStep(
++                    name="conditional",
++                    action_name="skip.action",
++                    input={},
++                    condition="only_photo",
++                ),
++            ),
++        )
++    )
++
++    result = await executor.execute("w", {"type": "document"})
++
++    assert skip.calls == []
++    assert result.status == "completed"
++    assert [s["name"] for s in result.steps] == ["always", "conditional"]
++    assert result.steps[0]["status"] == "completed"
++    assert result.steps[1]["status"] == "skipped"
++
++
++@pytest.mark.anyio
++async def test_executor_runs_conditioned_step_when_condition_true() -> None:
++    executor = make_executor()
++    skip = RecordingAction("skip.action")
++    executor.actions.register(skip)
++    executor.conditions.register(FieldEquals(name="only_photo", path="type", value="photo"))
++    executor.workflows.register(
++        WorkflowSpec(
++            name="w",
++            steps=(
++                WorkflowStep(
++                    name="conditional",
++                    action_name="skip.action",
++                    input={},
++                    condition="only_photo",
++                ),
++            ),
++        )
++    )
++
++    result = await executor.execute("w", {"type": "photo"})
++
++    assert len(skip.calls) == 1
++    assert result.status == "completed"
++    assert result.steps[0]["status"] == "completed"
++
++
++@pytest.mark.anyio
++async def test_executor_publishes_workflow_domain_events() -> None:
++    """The executor must publish domain events for every transition."""
++    broker = EventBroker(logger=logging.getLogger("test.automation.workflows"))
++    executor = make_executor(broker=broker)
++    executor.actions.register(RecordingAction())
++    executor.workflows.register(sample_workflow())
++
++    published: list[str] = []
++    original_publish = broker.publish
++
++    async def capture(event) -> None:
++        published.append(event.name)
++        await original_publish(event)
++
++    broker.publish = capture  # type: ignore[method-assign]
++
++    await executor.execute("w", {})
++
++    assert published == [
++        "automation.workflow_started",
++        "automation.workflow_step_started",
++        "automation.workflow_step_completed",
++        "automation.workflow_step_started",
++        "automation.workflow_step_completed",
++        "automation.workflow_completed",
++    ]
++
++
++@pytest.mark.anyio
++async def test_executor_publishes_workflow_failed_event_on_error() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation.workflows"))
++    executor = make_executor(broker=broker)
++
++    class FailingAction(RecordingAction):
++        async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
++            raise WorkflowError("boom")
++
++    executor.actions.register(FailingAction("failing.action"))
++    executor.workflows.register(
++        WorkflowSpec(
++            name="w",
++            steps=(WorkflowStep(name="only", action_name="failing.action", input={}),),
++        )
++    )
++
++    published: list[str] = []
++    original_publish = broker.publish
++
++    async def capture(event) -> None:
++        published.append(event.name)
++        await original_publish(event)
++
++    broker.publish = capture  # type: ignore[method-assign]
++
++    result = await executor.execute("w", {})
++
++    assert result.status == "failed"
++    assert published[-2:] == ["automation.workflow_step_failed", "automation.workflow_failed"]
++
++
++# --- Manager --------------------------------------------------------------
++@pytest.mark.anyio
++async def test_workflow_manager_binds_trigger_to_workflow_and_runs_on_event() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation.workflows"))
++    executor = make_executor(broker=broker)
++    action = RecordingAction()
++    executor.actions.register(action)
++    executor.workflows.register(sample_workflow())
++
++    manager = WorkflowManager(broker=broker, executor=executor)
++    manager.bind(EventTrigger(name="on-created", event_name="media.created"), "w")
++
++    await manager._on_event(Event(name="media.created", payload={"media_id": "m-1"}))
++
++    # One workflow run with two steps; the event payload flows into both steps.
++    assert len(action.calls) == 2
++    assert all(call["media_id"] == "m-1" for call in action.calls)
++
++
++@pytest.mark.anyio
++async def test_workflow_manager_ignores_non_matching_events() -> None:
++    broker = EventBroker(logger=logging.getLogger("test.automation.workflows"))
++    executor = make_executor()
++    action = RecordingAction()
++    executor.actions.register(action)
++    executor.workflows.register(sample_workflow())
++
++    manager = WorkflowManager(broker=broker, executor=executor)
++    manager.bind(EventTrigger(name="on-created", event_name="media.created"), "w")
++
++    await manager._on_event(Event(name="media.deleted", payload={}))
++
++    assert action.calls == []

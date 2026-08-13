@@ -1,0 +1,105 @@
+diff --git a/.ai/AI_CHANGELOG.md b/.ai/AI_CHANGELOG.md
+index 14447a9..b98ff87 100644
+--- a/.ai/AI_CHANGELOG.md
++++ b/.ai/AI_CHANGELOG.md
+@@ -24,10 +24,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
+ 
+ - **GoWA Context** (`context/gowa.md`): Updated with authentication model, device model, node model, and a single architecture diagram showing the data flow (host + username + password at the Connection; `device_id` at the Connector→Device boundary; `chat_id` at the Device→Node boundary). Added cross-references to `AI_MANIFEST.md`, `SYSTEM_PROMPT.md`, and `AI_CHANGELOG.md`.
+ - **Development Rules** (`development-rules.md`): Added "GoWA Authentication & Node Model" section with mandatory rules. Added cross-reference to `context/gowa.md`.
++- **Roadmap** (`roadmap.md`): Corrected Epic A1 classification. Epic A1 is the AI SDK documentation-only epic (Manifest, System Prompt, AI SDK Changelog, GoWA documentation, quality gates) and is now recorded as **Complete** (with Epic A0) under milestone M5 — AI SDK. The Automation Engine epic was renumbered to Epic A2 and moved to Future Epics. Release target 0.1.0 reflects the AI SDK as complete.
++
++### Commits
++
++- **A0** — `b848797` — `docs(ai): introduce BerTele2 AI Development Kit`
++- **A1 (primary)** — `040588b` — `docs(ai): standardize GoWA architecture and AI SDK`
++- **A1 (compliance)** — `d25d69a` — `docs(ai): fix Epic A1 compliance gaps`
++- **A1 (compliance finalize)** — `docs(ai): finalize Epic A1 compliance` — adds the unified Gate Failure Policy to `SYSTEM_PROMPT.md` (STOP / NOT commit / NOT push / report on any gate failure), documents the A0/A1 commit history, and fixes the project CHANGELOG link.
+ 
+ ### Notes
+ 
+ - This Epic (A1) is **documentation-only**. No application code, APIs, or connectors were modified.
++- This compliance fix is **documentation-only**. No application code, APIs, or connectors were modified.
+ - The SDK version is intentionally `TBD`; the AI SDK version will be assigned when the SDK reaches a stable release.
+ 
+ ## Related Documents
+@@ -35,4 +44,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
+ - [README.md](README.md) — AI SDK overview and index.
+ - [AI_MANIFEST.md](AI_MANIFEST.md) — SDK manifest.
+ - [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
+-- [../../CHANGELOG.md](../../CHANGELOG.md) — Application changelog.
+\ No newline at end of file
++- [../CHANGELOG.md](../CHANGELOG.md) — Application changelog.
+diff --git a/.ai/SYSTEM_PROMPT.md b/.ai/SYSTEM_PROMPT.md
+index bd7eb27..9ad3d3d 100644
+--- a/.ai/SYSTEM_PROMPT.md
++++ b/.ai/SYSTEM_PROMPT.md
+@@ -50,6 +50,17 @@ See [architecture.md](architecture.md) and [context/gowa.md](context/gowa.md) fo
+ 
+ Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
+ 
++> **Gate Failure Policy — MANDATORY.**
++>
++> If ANY quality gate fails — **Unit Tests**, **Scope Verification**, **Git Verification**, **Patch Verification**, or **Final Self Review** — the AI agent MUST:
++>
++> 1. **STOP** — halt all further work immediately.
++> 2. **NOT commit** — do not create any commit.
++> 3. **NOT push** — do not push anything to the remote.
++> 4. **Report the failure** — report the failed gate and the required remediation before proceeding.
++>
++> This policy applies to every gate: Unit Tests, Scope Verification, Git Verification, Patch Verification, and Final Self Review.
++
+ ### 4.1 Unit Tests
+ 
+ - All new behavior has unit tests.
+diff --git a/.ai/roadmap.md b/.ai/roadmap.md
+index df6f060..8597918 100644
+--- a/.ai/roadmap.md
++++ b/.ai/roadmap.md
+@@ -10,7 +10,7 @@ This document tracks milestones, epics, releases, and technical debt.
+ | M2 — Media Pipeline | ✅ Complete | Media engine, storage providers, pipeline steps |
+ | M3 — Connectors | ✅ Complete | GoWA and n8n connectors |
+ | M4 — Dashboard | ✅ Complete | Overview, logs, metrics, WebSocket |
+-| M5 — AI SDK | 🚧 In Progress | This Epic (A0) |
++| M5 — AI SDK | ✅ Complete | Epics A0 + A1 (AI Development Kit) |
+ | M6 — Automation Engine | 🔜 Planned | Workflow triggers, actions, conditions, scheduler |
+ 
+ ## Epics
+@@ -25,29 +25,25 @@ This document tracks milestones, epics, releases, and technical debt.
+ | Epic 17 | Media pipeline | `patches/epic-17.patch` |
+ | Epic 18 | Storage providers | `patches/epic-18.patch` |
+ | Epic 19 | GoWA media + connectors | `patches/epic-19.patch`, `patches/epic-19R.patch` |
+-
+-### Current Epic
+-
+-| Epic | Description | Status |
+-| --- | --- | --- |
+-| Epic A0 | AI Development Kit (AI SDK) | 🚧 In Progress |
++| Epic A0 | AI Development Kit (AI SDK) | `patches/epic-a0.patch` |
++| Epic A1 | AI SDK — documentation-only (Manifest, System Prompt, GoWA documentation, quality gates) | `patches/epic-a1.patch` |
+ 
+ ### Future Epics
+ 
+ | Epic | Description |
+ | --- | --- |
+-| Epic A1 | Automation Engine — triggers and actions |
+-| Epic A2 | Automation Engine — scheduler and workflows |
+-| Epic A3 | Additional storage providers (S3, GCS) |
+-| Epic A4 | Worker pool for background tasks |
+-| Epic A5 | Multi-tenant isolation |
+-| Epic A6 | Additional connectors |
++| Epic A2 | Automation Engine — triggers and actions |
++| Epic A3 | Automation Engine — scheduler and workflows |
++| Epic A4 | Additional storage providers (S3, GCS) |
++| Epic A5 | Worker pool for background tasks |
++| Epic A6 | Multi-tenant isolation |
++| Epic A7 | Additional connectors |
+ 
+ ## Release Targets
+ 
+ | Version | Target | Contents |
+ | --- | --- | --- |
+-| 0.1.0 | Next | AI SDK, automation engine foundation |
++| 0.1.0 | Next | AI SDK (complete), automation engine foundation |
+ | 0.2.0 | Later | Storage providers, worker pool |
+ | 1.0.0 | Future | Stable public API, multi-tenant |
+ 

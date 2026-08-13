@@ -36,7 +36,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Notes
 
 - This Epic (A1) is **documentation-only**. No application code, APIs, or connectors were modified.
-- This compliance fix is **documentation-only**. No application code, APIs, or connectors were modified.
 - The SDK version is intentionally `TBD`; the AI SDK version will be assigned when the SDK reaches a stable release.
 
 ## Related Documents

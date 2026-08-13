@@ -1,0 +1,563 @@
+diff --git a/.ai/AI_CHANGELOG.md b/.ai/AI_CHANGELOG.md
+new file mode 100644
+index 0000000..14447a9
+--- /dev/null
++++ b/.ai/AI_CHANGELOG.md
+@@ -0,0 +1,38 @@
++# AI SDK Changelog
++
++This changelog tracks every change to the **BerTele2 AI Development Kit (AI SDK)** — the documentation, architecture definitions, development rules, and configuration models under `.ai/`. It is maintained **separately** from the application `CHANGELOG.md`.
++
++All notable changes to the AI SDK are documented in this file.
++
++The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
++
++---
++
++## [Unreleased]
++
++### Added
++
++- **AI SDK Manifest** (`AI_MANIFEST.md`): Defines `sdk_version`, `architecture_version`, `minimum_supported_agent`, `supported_agents`, and `required_documents`. No SDK or architecture version was defined before this Epic, so `sdk_version` and `architecture_version` are marked `TBD`.
++- **System Prompt** (`SYSTEM_PROMPT.md`): Consolidates global development rules, architecture rules, scope rules, quality gates, coding rules, and review workflow into a single authoritative reference for AI agents.
++- **AI SDK Changelog** (`AI_CHANGELOG.md`): This file, tracking AI SDK changes separately from the application changelog.
++- **GoWA Architecture Documentation** (`context/gowa.md`): Documents the GoWA authentication model (Connection = host + username + password), device model (`device_id`), node model (nodes store only `device_id` and `chat_id`), and the architecture flow (GoWA Connection → GoWA Connector → GoWA Device → Workflow Node → GoWA Service / Sender).
++- **GoWA Development Rules** (`development-rules.md`): Adds mandatory rules that GoWA authentication belongs to the Connector, workflow nodes store only `device_id` and `chat_id`, authentication credentials must never appear inside workflow definitions, and all authentication logic MUST remain inside the GoWA Connector layer.
++- **Quality Gates** (`SYSTEM_PROMPT.md`): Explicitly defines the five mandatory quality gates: Unit Tests, Scope Verification, Git Verification, Patch Verification, and Final Self Review.
++- **Compatibility Section** (`README.md`): Adds a compatibility table covering AI agents (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Cursor, Windsurf, Continue, OpenHands). Agents are described as "designed to be compatible with" — no agent has been formally tested.
++
++### Changed
++
++- **GoWA Context** (`context/gowa.md`): Updated with authentication model, device model, node model, and a single architecture diagram showing the data flow (host + username + password at the Connection; `device_id` at the Connector→Device boundary; `chat_id` at the Device→Node boundary). Added cross-references to `AI_MANIFEST.md`, `SYSTEM_PROMPT.md`, and `AI_CHANGELOG.md`.
++- **Development Rules** (`development-rules.md`): Added "GoWA Authentication & Node Model" section with mandatory rules. Added cross-reference to `context/gowa.md`.
++
++### Notes
++
++- This Epic (A1) is **documentation-only**. No application code, APIs, or connectors were modified.
++- The SDK version is intentionally `TBD`; the AI SDK version will be assigned when the SDK reaches a stable release.
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview and index.
++- [AI_MANIFEST.md](AI_MANIFEST.md) — SDK manifest.
++- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
++- [../../CHANGELOG.md](../../CHANGELOG.md) — Application changelog.
+\ No newline at end of file
+diff --git a/.ai/AI_MANIFEST.md b/.ai/AI_MANIFEST.md
+new file mode 100644
+index 0000000..902023d
+--- /dev/null
++++ b/.ai/AI_MANIFEST.md
+@@ -0,0 +1,76 @@
++# AI SDK Manifest
++
++This manifest defines the version, compatibility, and required documents for the BerTele2 AI Development Kit (AI SDK).
++
++## sdk_version
++
++`TBD`
++
++> No AI SDK version was defined before this Epic. The version will be set when the SDK reaches a stable release.
++
++## architecture_version
++
++`TBD`
++
++> No architecture version was defined before this Epic. The version will be set when the architecture reaches a stable release.
++
++## minimum_supported_agent
++
++Any AI coding agent that can:
++
++- Read Markdown files.
++- Execute git commands.
++- Run tests and linters.
++- Generate patches.
++
++## supported_agents
++
++The AI SDK is **designed to be compatible with** the following agents. Compatibility is intended, not verified — no agent has been formally tested against this SDK.
++
++| Agent | Status |
++| --- | --- |
++| ChatGPT | Designed to be compatible with |
++| Codex | Designed to be compatible with |
++| Claude Code | Designed to be compatible with |
++| Gemini CLI | Designed to be compatible with |
++| Cline | Designed to be compatible with |
++| RooCode | Designed to be compatible with |
++| Cursor | Designed to be compatible with |
++| Windsurf | Designed to be compatible with |
++| Continue | Designed to be compatible with |
++| OpenHands | Designed to be compatible with |
++
++## required_documents
++
++The following documents are required reading for any AI agent working on BerTele2:
++
++| Document | Purpose |
++| --- | --- |
++| [README.md](README.md) | AI SDK overview and index. |
++| [project.md](project.md) | Vision, mission, goals, users, platforms, philosophy. |
++| [architecture.md](architecture.md) | Complete system architecture with diagrams. |
++| [roadmap.md](roadmap.md) | Milestones, epics, releases, technical debt. |
++| [coding-standards.md](coding-standards.md) | Python style, typing, docstrings, logging, DI. |
++| [development-rules.md](development-rules.md) | Mandatory development rules. |
++| [workflow.md](workflow.md) | Design → implementation → review → release. |
++| [git-workflow.md](git-workflow.md) | Branching, commits, patches, versioning. |
++| [module-map.md](module-map.md) | Every module: purpose, deps, APIs, plans. |
++| [testing.md](testing.md) | Testing strategy and expectations. |
++| [release.md](release.md) | Release process and checklist. |
++| [review-checklist.md](review-checklist.md) | Code review checklist. |
++| [glossary.md](glossary.md) | Project terminology. |
++| [agent-template.md](agent-template.md) | Reusable prompt for AI agents. |
++| [epic-template.md](epic-template.md) | Reusable Epic template. |
++| [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) | System prompt for AI agents. |
++| [AI_CHANGELOG.md](AI_CHANGELOG.md) | AI SDK changelog. |
++| [context/](context/) | Per-subsystem deep dives. |
++| [prompts/](prompts/) | Reusable prompt templates. |
++| [decisions/](decisions/) | Architecture Decision Records (ADRs). |
++
++---
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview.
++- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
++- [AI_CHANGELOG.md](AI_CHANGELOG.md) — AI SDK changelog.
+\ No newline at end of file
+diff --git a/.ai/README.md b/.ai/README.md
+index 0f415eb..9824c8f 100644
+--- a/.ai/README.md
++++ b/.ai/README.md
+@@ -1,6 +1,6 @@
+ # BerTele2 AI Development Kit (AI SDK)
+ 
+-The **AI Development Kit** is the authoritative documentation for the BerTele2 project. It is designed so that **any AI coding agent** (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue, etc.) can understand the project without prior knowledge.
++The **AI Development Kit** is the authoritative documentation for the BerTele2 project. It is designed so that **any AI coding agent** (ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Cursor, Windsurf, Continue, OpenHands, etc.) can understand the project without prior knowledge.
+ 
+ This directory contains project intelligence and development guidance only. It does **not** add application features.
+ 
+@@ -22,17 +22,19 @@ The SDK is agent-agnostic. It works with any agent that can:
+ - Run tests and linters.
+ - Generate patches.
+ 
+-Examples: ChatGPT, Codex, Claude Code, Gemini CLI, Cline, RooCode, Amp, OpenHands, Cursor, Windsurf, Continue.
++See [AI_MANIFEST.md](AI_MANIFEST.md) for the full compatibility matrix.
+ 
+ ## How to Start a New Epic
+ 
+-1. Read [project.md](project.md) and [architecture.md](architecture.md) to understand the vision and system.
+-2. Read [roadmap.md](roadmap.md) to see what is planned and what is complete.
+-3. Read [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md) before writing code.
+-4. Use the [epic-template.md](epic-template.md) to structure the Epic.
+-5. Follow [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md) for implementation and delivery.
+-6. Consult [module-map.md](module-map.md) and the [context/](context/) files for subsystem details.
+-7. Review your work against [review-checklist.md](review-checklist.md) before finishing.
++1. Read [AI_MANIFEST.md](AI_MANIFEST.md) for the SDK version and required documents.
++2. Read [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the consolidated system prompt.
++3. Read [project.md](project.md) and [architecture.md](architecture.md) to understand the vision and system.
++4. Read [roadmap.md](roadmap.md) to see what is planned and what is complete.
++5. Read [development-rules.md](development-rules.md) and [coding-standards.md](coding-standards.md) before writing code.
++6. Use the [epic-template.md](epic-template.md) to structure the Epic.
++7. Follow [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md) for implementation and delivery.
++8. Consult [module-map.md](module-map.md) and the [context/](context/) files for subsystem details.
++9. Review your work against [review-checklist.md](review-checklist.md) before finishing.
+ 
+ ## How to Review Code
+ 
+@@ -67,10 +69,27 @@ git diff HEAD~1 HEAD > patches/epic-<id>.patch
+ 
+ ---
+ 
++## Quality Gates
++
++Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
++
++- **Unit Tests** — All new behavior has unit tests; full suite passes (`pytest`).
++- **Scope Verification** — Run `git diff --name-only HEAD`; only `.ai/` files and `README.md` may be modified.
++- **Git Verification** — Commit message follows Conventional Commits; branch is up to date.
++- **Patch Verification** — Generate and verify the patch file.
++- **Final Self Review** — Review against [review-checklist.md](review-checklist.md).
++
++See [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the full quality gate definitions.
++
++---
++
+ ## Documentation Index
+ 
+ | Document | Purpose |
+ | --- | --- |
++| [AI_MANIFEST.md](AI_MANIFEST.md) | SDK version, compatibility, required documents. |
++| [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) | System prompt for AI agents (rules, gates, workflow). |
++| [AI_CHANGELOG.md](AI_CHANGELOG.md) | AI SDK changelog. |
+ | [project.md](project.md) | Vision, mission, goals, users, platforms, philosophy |
+ | [architecture.md](architecture.md) | Complete system architecture with diagrams |
+ | [roadmap.md](roadmap.md) | Milestones, epics, releases, technical debt |
+diff --git a/.ai/SYSTEM_PROMPT.md b/.ai/SYSTEM_PROMPT.md
+new file mode 100644
+index 0000000..bd7eb27
+--- /dev/null
++++ b/.ai/SYSTEM_PROMPT.md
+@@ -0,0 +1,158 @@
++# BerTele2 AI System Prompt
++
++This is the system prompt for any AI coding agent working on the **BerTele2** project. It consolidates global development rules, architecture rules, scope rules, quality gates, coding rules, and the review workflow into a single authoritative reference.
++
++---
++
++## 1. Global Development Rules
++
++You are an AI coding agent working on **BerTele2**, a self-hosted Telegram MTProto gateway. Follow these rules exactly:
++
++1. **Read the AI SDK first.** Before making any changes, read the files listed in [AI_MANIFEST.md](AI_MANIFEST.md) → `required_documents`.
++2. **One Epic = One Responsibility.** Each Epic addresses a single, well-defined responsibility. No scope creep.
++3. **No Unrelated Refactoring.** Do not refactor code unrelated to the current Epic. Note issues in the technical debt backlog ([roadmap.md](roadmap.md)).
++4. **Backward Compatibility.** Never break public APIs without a deprecation cycle. Additive changes are preferred.
++5. **Use Interfaces.** Depend on abstractions, not concrete implementations.
++6. **Prefer Composition.** Compose small, focused units rather than deep inheritance hierarchies.
++7. **Use Dependency Injection.** Wire dependencies explicitly via constructor injection.
++8. **No Duplicated Logic.** Reuse shared services and utilities.
++9. **No Circular Imports.** Keep module boundaries clean.
++10. **Test Every Behavior.** Every public behavior must have a test.
++11. **Document Changes.** Update the AI SDK and relevant docs when behavior changes.
++12. **Follow Coding Standards.** All code must follow [coding-standards.md](coding-standards.md).
++
++See [development-rules.md](development-rules.md) for the full mandatory rule set.
++
++---
++
++## 2. Architecture Rules
++
++- **GoWA authentication belongs to the Connector.** Authentication credentials (host, username, password) are managed at the GoWA Connection level by the Connector. They must never be propagated into workflow nodes or media payloads.
++- **Workflow nodes store only `device_id` and `chat_id`.** Workflow nodes may contain ONLY these two fields.
++- **Authentication credentials must never appear inside workflow definitions.** Host, username, password, and authentication tokens must never be stored in workflow nodes, workflow definitions, or any persisted workflow data.
++- **Keep modules independent.** Each subsystem should be self-contained and communicate via interfaces or the event bus.
++- **Use the container for composition root.** Dependencies are wired via `app/core/container.py`.
++
++See [architecture.md](architecture.md) and [context/gowa.md](context/gowa.md) for full details.
++
++---
++
++## 3. Scope Rules
++
++- **Documentation-only Epics.** Some Epics (like this one) modify only documentation. No application code, APIs, or connectors may be modified.
++- **Verify scope before commit.** Run `git diff --name-only HEAD` and confirm only `.ai/` files and `README.md` are modified.
++- **If any application code appears, STOP.** Do not commit. Reassess and remove the change.
++- **Epic scope is defined in the task description.** Do not add features outside the Epic scope.
++
++---
++
++## 4. Quality Gates
++
++Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
++
++### 4.1 Unit Tests
++
++- All new behavior has unit tests.
++- Tests are isolated and deterministic.
++- Error paths and edge cases are covered.
++- Full suite passes: `pytest`.
++- Coverage expectations are met.
++
++See [testing.md](testing.md).
++
++### 4.2 Scope Verification
++
++- Run `git diff --name-only HEAD`.
++- Verify that ONLY documentation files inside `.ai/` and `README.md` have been modified.
++- If any application code appears, STOP. Do not commit.
++
++### 4.3 Git Verification
++
++- Commit message follows Conventional Commits: `docs(ai): <description>`.
++- Branch is up to date with `main`.
++- No uncommitted changes remain.
++
++See [git-workflow.md](git-workflow.md).
++
++### 4.4 Patch Verification
++
++- Generate the patch: `git diff HEAD~1 HEAD > patches/epic-<id>.patch`.
++- Verify the patch file exists: `ls -lah patches`.
++- Verify the patch diff: `git diff --name-only HEAD~1 HEAD` and `git diff --stat HEAD~1 HEAD`.
++- Verify the patch applies cleanly on a fresh checkout.
++
++### 4.5 Final Self Review
++
++- Review all changes against [review-checklist.md](review-checklist.md).
++- Confirm no unrelated refactoring.
++- Confirm documentation is updated.
++- Confirm the AI SDK changelog is updated.
++
++---
++
++## 5. Coding Rules
++
++- Follow PEP 8 with 4-space indentation.
++- Use double quotes for strings.
++- Use `from __future__ import annotations` at the top of every module.
++- Use `snake_case` for functions/methods/variables, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants.
++- Use type hints on all function signatures and public attributes.
++- Use Google-style docstrings (purpose, Args, Returns, Raises).
++- Use the `logging` module with a per-module logger.
++- Do not log secrets, tokens, or passwords.
++- Define domain-specific exceptions in each subsystem.
++- Catch exceptions at boundaries (API, pipeline, worker).
++- Use `raise ... from exc` to preserve context.
++
++See [coding-standards.md](coding-standards.md).
++
++---
++
++## 6. Review Workflow
++
++1. **Self-review** against [review-checklist.md](review-checklist.md).
++2. **Scope verification** — confirm no unrelated changes.
++3. **Tests** — run `pytest` and confirm all pass.
++4. **Documentation** — confirm AI SDK and relevant docs are updated.
++5. **Commit** — use Conventional Commits format.
++6. **Patch** — generate and verify the patch file.
++7. **Push** — push the branch to origin.
++
++See [workflow.md](workflow.md) and [git-workflow.md](git-workflow.md).
++
++---
++
++## 7. AI SDK Documents
++
++| Document | Purpose |
++| --- | --- |
++| [README.md](README.md) | AI SDK overview and index. |
++| [AI_MANIFEST.md](AI_MANIFEST.md) | SDK version, compatibility, required documents. |
++| [project.md](project.md) | Vision, mission, goals, users, platforms, philosophy. |
++| [architecture.md](architecture.md) | Complete system architecture with diagrams. |
++| [development-rules.md](development-rules.md) | Mandatory development rules. |
++| [coding-standards.md](coding-standards.md) | Python style, typing, docstrings, logging, DI. |
++| [workflow.md](workflow.md) | Design → implementation → review → release. |
++| [git-workflow.md](git-workflow.md) | Branching, commits, patches, versioning. |
++| [module-map.md](module-map.md) | Every module: purpose, deps, APIs, plans. |
++| [testing.md](testing.md) | Testing strategy and expectations. |
++| [release.md](release.md) | Release process and checklist. |
++| [review-checklist.md](review-checklist.md) | Code review checklist. |
++| [glossary.md](glossary.md) | Project terminology. |
++| [AI_CHANGELOG.md](AI_CHANGELOG.md) | AI SDK changelog. |
++| [context/](context/) | Per-subsystem deep dives. |
++| [prompts/](prompts/) | Reusable prompt templates. |
++| [decisions/](decisions/) | Architecture Decision Records (ADRs). |
++
++---
++
++## Related Documents
++
++- [README.md](README.md) — AI SDK overview.
++- [AI_MANIFEST.md](AI_MANIFEST.md) — SDK manifest.
++- [development-rules.md](development-rules.md) — Mandatory rules.
++- [coding-standards.md](coding-standards.md) — Style and conventions.
++- [review-checklist.md](review-checklist.md) — Review checklist.
++- [testing.md](testing.md) — Testing strategy.
++- [workflow.md](workflow.md) — Development workflow.
++- [git-workflow.md](git-workflow.md) — Git workflow.
+\ No newline at end of file
+diff --git a/.ai/architecture.md b/.ai/architecture.md
+index 0b9c0ee..ebdd991 100644
+--- a/.ai/architecture.md
++++ b/.ai/architecture.md
+@@ -90,6 +90,8 @@ See [context/telegram.md](context/telegram.md).
+ 
+ Connects BerTele2 to GoWA (WhatsApp gateway) for sending media. Includes a config, sender, mapper, and service layer.
+ 
++Authentication is handled at the GoWA Connection level (host, username, password). See [context/gowa.md](context/gowa.md) for the full authentication, device, and node models.
++
+ ```mermaid
+ flowchart LR
+     API[GoWA Media API] --> Service[GoWAMediaService]
+@@ -240,6 +242,10 @@ See [roadmap.md](roadmap.md).
+ 
+ ## Related Documents
+ 
++- [README.md](README.md) — AI SDK overview and index.
++- [AI_MANIFEST.md](AI_MANIFEST.md) — SDK version and compatibility.
++- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt for AI agents.
++- [AI_CHANGELOG.md](AI_CHANGELOG.md) — AI SDK changelog.
+ - [project.md](project.md) — Vision and goals.
+ - [module-map.md](module-map.md) — Module-level details.
+ - [context/](context/) — Per-subsystem deep dives.
+diff --git a/.ai/context/gowa.md b/.ai/context/gowa.md
+index 2753c8e..9c08c41 100644
+--- a/.ai/context/gowa.md
++++ b/.ai/context/gowa.md
+@@ -10,13 +10,46 @@ The GoWA connector bridges BerTele2 to GoWA (a WhatsApp gateway) for sending med
+ 
+ ```mermaid
+ flowchart LR
+-    API[GoWA Media API] --> Service[GoWAMediaService]
+-    Service --> Sender[GoWAMediaSender]
+-    Sender --> GoWA[GoWA Gateway]
+-    Service --> Config[GoWAConfig]
+-    Service --> Resource[MediaResource]
++    Connection[GoWA Connection<br/>host<br/>username<br/>password] --> Connector[GoWA Connector]
++    Connector -- device_id --> Device[GoWA Device]
++    Device -- chat_id --> Node[Workflow Node]
++    Node --> Sender[GoWA Service / Sender]
+ ```
+ 
++### Authentication Model
++
++Authentication is handled at the **GoWA Connection** level.
++
++Each connection consists of:
++
++- **host** — GoWA gateway host/URL.
++- **username** — GoWA API username.
++- **password** — GoWA API password.
++
++These credentials **MUST NOT** be stored inside workflow nodes. They are managed exclusively by the Connector and injected at runtime.
++
++### Device Model
++
++Each WhatsApp device is identified by:
++
++- **device_id**
++
++One GoWA connection may manage one or more devices if supported by the connector.
++
++### Node Model
++
++Workflow nodes may contain **ONLY**:
++
++- **device_id**
++- **chat_id**
++
++Nodes **MUST NEVER** contain:
++
++- host
++- username
++- password
++- authentication tokens
++
+ ## Main Components
+ 
+ - **`GoWAConfig`** — Configuration for the GoWA connector (base URL, API key, timeouts, retries).
+@@ -56,4 +89,8 @@ flowchart LR
+ - [architecture.md](../architecture.md) — System architecture.
+ - [media.md](media.md) — Media resources.
+ - [plugins.md](plugins.md) — Plugin SDK.
+-- [decisions/ADR-0002-plugin-architecture.md](../decisions/ADR-0002-plugin-architecture.md) — Plugin decision.
+\ No newline at end of file
++- [decisions/ADR-0002-plugin-architecture.md](../decisions/ADR-0002-plugin-architecture.md) — Plugin decision.
++- [../development-rules.md](../development-rules.md) — Mandatory development rules.
++- [../AI_MANIFEST.md](../AI_MANIFEST.md) — AI SDK manifest.
++- [../SYSTEM_PROMPT.md](../SYSTEM_PROMPT.md) — System prompt for AI agents.
++- [../AI_CHANGELOG.md](../AI_CHANGELOG.md) — AI SDK changelog.
+\ No newline at end of file
+diff --git a/.ai/development-rules.md b/.ai/development-rules.md
+index 7cd7625..197ac22 100644
+--- a/.ai/development-rules.md
++++ b/.ai/development-rules.md
+@@ -37,6 +37,20 @@ These are **mandatory** rules for all development on BerTele2. Every Epic, bugfi
+ - **Keep functions small.** Prefer many small functions over one large one.
+ - **Name things clearly.** Use descriptive names that convey intent.
+ 
++## GoWA Authentication & Node Model
++
++The following rules are **mandatory** for all GoWA-related development:
++
++- **GoWA authentication belongs to the Connector.** Authentication credentials (host, username, password) are managed at the GoWA Connection level by the Connector. They must never be propagated into workflow nodes or media payloads.
++
++- **Workflow nodes store only `device_id` and `chat_id`.** Workflow nodes may contain ONLY these two fields. No other data should be embedded in node definitions.
++
++- **Authentication credentials must never appear inside workflow definitions.** Host, username, password, and authentication tokens must never be stored in workflow nodes, workflow definitions, or any persisted workflow data.
++
++- **Authentication logic stays inside the Connector layer.** All GoWA authentication logic (credential validation, token acquisition, request signing, and connection handling) MUST remain inside the GoWA Connector layer. It must never be implemented in workflow nodes, services, senders, or any other layer.
++
++See [context/gowa.md](context/gowa.md) for the full GoWA architecture documentation.
++
+ ## Enforcement
+ 
+ - Code reviews check compliance with these rules. See [review-checklist.md](review-checklist.md).
+@@ -50,4 +64,5 @@ These are **mandatory** rules for all development on BerTele2. Every Epic, bugfi
+ - [coding-standards.md](coding-standards.md) — Style and conventions.
+ - [workflow.md](workflow.md) — Development workflow.
+ - [review-checklist.md](review-checklist.md) — Review checklist.
+-- [roadmap.md](roadmap.md) — Technical debt backlog.
+\ No newline at end of file
++- [roadmap.md](roadmap.md) — Technical debt backlog.
++- [context/gowa.md](context/gowa.md) — GoWA architecture.
+\ No newline at end of file
+diff --git a/.ai/review-checklist.md b/.ai/review-checklist.md
+index 0ef0e79..b8da471 100644
+--- a/.ai/review-checklist.md
++++ b/.ai/review-checklist.md
+@@ -2,6 +2,18 @@
+ 
+ Use this checklist when reviewing any code change on BerTele2.
+ 
++## Quality Gates
++
++Before finishing any Epic, you **must** pass all of the following mandatory quality gates:
++
++- [ ] **Unit Tests** — All new behavior has unit tests; full suite passes (`pytest`).
++- [ ] **Scope Verification** — Run `git diff --name-only HEAD`; only `.ai/` files and `README.md` may be modified.
++- [ ] **Git Verification** — Commit message follows Conventional Commits; branch is up to date.
++- [ ] **Patch Verification** — Generate and verify the patch file.
++- [ ] **Final Self Review** — Review against this checklist.
++
++See [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for the full quality gate definitions.
++
+ ## Architecture
+ 
+ - [ ] Change matches the Epic scope (no unrelated refactoring).
+@@ -32,6 +44,7 @@ Use this checklist when reviewing any code change on BerTele2.
+ - [ ] AI SDK and relevant docs are updated.
+ - [ ] ADR added for significant decisions.
+ - [ ] CHANGELOG updated if behavior changed.
++- [ ] AI CHANGELOG updated if AI SDK changed.
+ 
+ ## Performance
+ 
+@@ -61,4 +74,5 @@ Use this checklist when reviewing any code change on BerTele2.
+ - [development-rules.md](development-rules.md) — Mandatory rules.
+ - [coding-standards.md](coding-standards.md) — Style and conventions.
+ - [testing.md](testing.md) — Testing strategy.
++- [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) — System prompt and quality gates.
+ - [prompts/review-template.md](prompts/review-template.md) — Review prompt template.
+\ No newline at end of file
+diff --git a/README.md b/README.md
+index 6a09853..c68a65d 100644
+--- a/README.md
++++ b/README.md
+@@ -27,6 +27,25 @@ BerTele2 is an open-source Telegram MTProto gateway built with FastAPI and Telet
+ - Ruff
+ - Black
+ 
++## AI SDK Compatibility
++
++BerTele2 includes an AI Development Kit (`.ai/`) that documents the project for AI coding agents. The SDK is **designed to be compatible with** the following agents. Compatibility is intended, not verified — no agent has been formally tested against this SDK.
++
++| Agent | Status |
++| --- | --- |
++| ChatGPT | Designed to be compatible with |
++| Codex | Designed to be compatible with |
++| Claude Code | Designed to be compatible with |
++| Gemini CLI | Designed to be compatible with |
++| Cline | Designed to be compatible with |
++| RooCode | Designed to be compatible with |
++| Cursor | Designed to be compatible with |
++| Windsurf | Designed to be compatible with |
++| Continue | Designed to be compatible with |
++| OpenHands | Designed to be compatible with |
++
++See [`.ai/README.md`](.ai/README.md) for the full AI SDK documentation.
++
+ ## Configuration
+ 
+ Copy `.env.example` to `.env` and set your Telegram credentials when you are ready to connect to MTProto.
+@@ -41,5 +60,4 @@ uvicorn app.main:app --reload
+ ## Docker
+ 
+ ```bash
+-docker compose up --build
+-```
++docker compose up --build
+\ No newline at end of file
