@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import './App.css'
 
 type IconName = 'grid' | 'send' | 'users' | 'webhook' | 'session' | 'media' | 'key' | 'activity' | 'settings' | 'menu' | 'bell' | 'search' | 'arrow' | 'check' | 'clock' | 'message'
@@ -24,7 +24,7 @@ const activity = [
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  const paths: Record<IconName, React.ReactNode> = {
+  const paths: Record<IconName, ReactNode> = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     send: <><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></>,
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
@@ -71,40 +71,22 @@ function App() {
     <div className="app-shell">
       {sidebarOpen && <button className="mobile-overlay" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`}>
-        <div className="brand">
-          <div className="brand-mark">B</div>
-          <div><strong>BerTele2</strong><span>Control Center</span></div>
-        </div>
+        <div className="brand"><div className="brand-mark">B</div><div><strong>BerTele2</strong><span>Control Center</span></div></div>
         <div className="workspace-switcher"><div className="workspace-avatar">B</div><div><strong>BerTele2 Production</strong><span>Workspace</span></div><span className="chevron">⌄</span></div>
-        <nav>
-          {navGroups.map((group) => <div className="nav-group" key={group.title}><div className="nav-label">{group.title}</div>{group.items.map((item) => <button key={item.label} className={`nav-item ${active === item.label ? 'active' : ''}`} onClick={() => { setActive(item.label); setSidebarOpen(false) }}><Icon name={item.icon} /><span>{item.label}</span>{item.badge && <b>{item.badge}</b>}</button>)}</div>)}
-        </nav>
+        <nav>{navGroups.map((group) => <div className="nav-group" key={group.title}><div className="nav-label">{group.title}</div>{group.items.map((item) => <button key={item.label} className={`nav-item ${active === item.label ? 'active' : ''}`} onClick={() => { setActive(item.label); setSidebarOpen(false) }}><Icon name={item.icon} /><span>{item.label}</span>{item.badge && <b>{item.badge}</b>}</button>)}</div>)}</nav>
         <div className="sidebar-footer"><div className="status-row"><span className={`status-dot ${apiOnline === false ? 'offline' : ''}`} /><span>{apiOnline === false ? 'API offline' : apiOnline === true ? 'API connected' : 'Checking API…'}</span></div><button className="user-card"><div className="avatar">AY</div><div><strong>Admin</strong><span>Administrator</span></div><span>•••</span></button></div>
       </aside>
 
       <main className="main">
-        <header className="topbar">
-          <button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Icon name="menu" /></button>
-          <div className="breadcrumbs"><span>BerTele2</span><i>/</i><strong>{active}</strong></div>
-          <div className="top-actions"><label className="search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search activity…" /></label><button className="icon-button notification"><Icon name="bell" /><span /></button><div className="avatar top-avatar">AY</div></div>
-        </header>
+        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Icon name="menu" /></button><div className="breadcrumbs"><span>BerTele2</span><i>/</i><strong>{active}</strong></div><div className="top-actions"><label className="search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search activity…" /></label><button className="icon-button notification"><Icon name="bell" /><span /></button><div className="avatar top-avatar">AY</div></div></header>
 
         <div className="content">
           <section className="page-heading"><div><div className="eyebrow">CONTROL CENTER</div><h1>{active}</h1><p>{active === 'Overview' ? 'Monitor Telegram, webhooks, media and automation from one place.' : `Manage your ${active.toLowerCase()} from the BerTele2 control center.`}</p></div><div className="heading-actions"><button className="secondary-button">Last 24 hours⌄</button><button className="primary-button" onClick={() => setActive('Messages')}><Icon name="send" size={16} /> Send message</button></div></section>
 
           {active === 'Overview' ? <>
-            <section className="stats-grid">
-              <Stat label="Messages today" value="1,284" change="+18.4%" tone="green" icon="message" />
-              <Stat label="Active sessions" value="4 / 5" change="80% online" tone="blue" icon="session" />
-              <Stat label="Webhook deliveries" value="98.7%" change="+2.1%" tone="purple" icon="webhook" />
-              <Stat label="Media processed" value="3.8 GB" change="+12.6%" tone="orange" icon="media" />
-            </section>
-
-            <section className="dashboard-grid">
-              <div className="panel traffic-panel"><div className="panel-header"><div><h2>Message activity</h2><p>Incoming and outgoing messages</p></div><span className="live-pill"><i /> Live</span></div><div className="chart"><div className="chart-y"><span>400</span><span>300</span><span>200</span><span>100</span><span>0</span></div><div className="chart-area"><div className="grid-lines"><i /><i /><i /><i /><i /></div><svg viewBox="0 0 700 240" preserveAspectRatio="none" aria-label="Message activity chart"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".22" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs><path className="area" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35 V240 H0Z" /><path className="line" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35" /></svg><div className="chart-x"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span></div></div></div><div className="legend"><span><i className="incoming" /> Incoming <b>842</b></span><span><i className="outgoing" /> Outgoing <b>442</b></span></div></div>
-              <div className="panel health-panel"><div className="panel-header"><div><h2>System health</h2><p>Live service status</p></div><button className="more">•••</button></div><div className="health-score"><div className="score-ring"><strong>98</strong><span>/100</span></div><div><strong>Excellent</strong><p>All critical services are healthy.</p></div></div><div className="service-list"><Service name="Telegram engine" detail="MTProto connection" status="Operational" /><Service name="Webhook dispatcher" detail="Delivery queue" status="Operational" /><Service name="Media pipeline" detail="Storage + processing" status="Operational" /><Service name="n8n integration" detail="Automation bridge" status="Operational" /></div></div>
-            </section>
-
+            <section className="stats-grid"><Stat label="Messages today" value="1,284" change="+18.4%" tone="green" icon="message" /><Stat label="Active sessions" value="4 / 5" change="80% online" tone="blue" icon="session" /><Stat label="Webhook deliveries" value="98.7%" change="+2.1%" tone="purple" icon="webhook" /><Stat label="Media processed" value="3.8 GB" change="+12.6%" tone="orange" icon="media" /></section>
+            <section className="dashboard-grid"><div className="panel traffic-panel"><div className="panel-header"><div><h2>Message activity</h2><p>Incoming and outgoing messages</p></div><span className="live-pill"><i /> Live</span></div><div className="chart"><div className="chart-y"><span>400</span><span>300</span><span>200</span><span>100</span><span>0</span></div><div className="chart-area"><div className="grid-lines"><i /><i /><i /><i /><i /></div><svg viewBox="0 0 700 240" preserveAspectRatio="none" aria-label="Message activity chart"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".22" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs><path className="area" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35 V240 H0Z" /><path className="line" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35" /></svg><div className="chart-x"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span></div></div></div><div className="legend"><span><i className="incoming" /> Incoming <b>842</b></span><span><i className="outgoing" /> Outgoing <b>442</b></span></div></div>
+              <div className="panel health-panel"><div className="panel-header"><div><h2>System health</h2><p>Live service status</p></div><button className="more">•••</button></div><div className="health-score"><div className="score-ring"><strong>98</strong><span>/100</span></div><div><strong>Excellent</strong><p>All critical services are healthy.</p></div></div><div className="service-list"><Service name="Telegram engine" detail="MTProto connection" status="Operational" /><Service name="Webhook dispatcher" detail="Delivery queue" status="Operational" /><Service name="Media pipeline" detail="Storage + processing" status="Operational" /><Service name="n8n integration" detail="Automation bridge" status="Operational" /></div></div></section>
             <section className="bottom-grid"><div className="panel activity-panel"><div className="panel-header"><div><h2>Recent activity</h2><p>Latest events across your workspace</p></div><button className="link-button" onClick={() => setActive('Activity')}>View all <Icon name="arrow" size={15} /></button></div><div className="activity-list">{filteredActivity.map((item) => <div className="activity-item" key={item.title}><div className={`activity-icon ${item.type}`}><Icon name={item.type === 'message' ? 'message' : 'check'} size={16} /></div><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>)}</div></div><div className="panel quick-panel"><div className="panel-header"><div><h2>Quick actions</h2><p>Common tasks</p></div></div><div className="quick-actions"><QuickAction icon="send" title="Send Telegram message" onClick={() => setActive('Messages')} /><QuickAction icon="webhook" title="Create webhook" onClick={() => setActive('Webhooks')} /><QuickAction icon="session" title="Manage sessions" onClick={() => setActive('Sessions')} /><QuickAction icon="key" title="Create API key" onClick={() => setActive('API Keys')} /></div></div></section>
           </> : <section className="panel placeholder"><div className="placeholder-icon"><Icon name={navGroups.flatMap((group) => group.items).find((item) => item.label === active)?.icon || 'grid'} size={26} /></div><h2>{active}</h2><p>The UI foundation is ready. This module is connected to the existing BerTele2 API architecture and can be wired to its endpoint without changing the dashboard shell.</p><button className="primary-button" onClick={() => setActive('Overview')}>Back to overview</button></section>}
         </div>
@@ -113,16 +95,8 @@ function App() {
   )
 }
 
-function Stat({ label, value, change, tone, icon }: { label: string; value: string; change: string; tone: string; icon: IconName }) {
-  return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon name={icon} /></div><div className="stat-copy"><span>{label}</span><strong>{value}</strong><small className={tone === 'green' || tone === 'blue' ? 'positive' : ''}>{change}</small></div><span className="stat-period">Today</span></div>
-}
-
-function Service({ name, detail, status }: { name: string; detail: string; status: string }) {
-  return <div className="service"><div className="service-status"><i /></div><div><strong>{name}</strong><span>{detail}</span></div><b>{status}</b></div>
-}
-
-function QuickAction({ icon, title, onClick }: { icon: IconName; title: string; onClick: () => void }) {
-  return <button className="quick-action" onClick={onClick}><span><Icon name={icon} size={17} /></span><strong>{title}</strong><Icon name="arrow" size={15} /></button>
-}
+function Stat({ label, value, change, tone, icon }: { label: string; value: string; change: string; tone: string; icon: IconName }) { return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon name={icon} /></div><div className="stat-copy"><span>{label}</span><strong>{value}</strong><small className={tone === 'green' || tone === 'blue' ? 'positive' : ''}>{change}</small></div><span className="stat-period">Today</span></div> }
+function Service({ name, detail, status }: { name: string; detail: string; status: string }) { return <div className="service"><div className="service-status"><i /></div><div><strong>{name}</strong><span>{detail}</span></div><b>{status}</b></div> }
+function QuickAction({ icon, title, onClick }: { icon: IconName; title: string; onClick: () => void }) { return <button className="quick-action" onClick={onClick}><span><Icon name={icon} size={17} /></span><strong>{title}</strong><Icon name="arrow" size={15} /></button> }
 
 export default App
