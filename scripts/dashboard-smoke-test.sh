@@ -8,6 +8,7 @@ set -euo pipefail
 #   bash scripts/dashboard-smoke-test.sh
 
 API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000/api/v1}"
+ROOT_BASE_URL="${ROOT_BASE_URL:-${API_BASE_URL%/api/v1}}"
 BERTELE2_USER="${BERTELE2_USER:-}"
 BERTELE2_PASSWORD="${BERTELE2_PASSWORD:-}"
 
@@ -44,6 +45,7 @@ PY
 
 echo "== BerTele2 Phase 3 smoke test =="
 echo "API: $API_BASE_URL"
+echo "Root: $ROOT_BASE_URL"
 
 request GET "$API_BASE_URL/health" "$TMP_DIR/health.json"
 assert_json_key "$TMP_DIR/health.json" "status"
@@ -76,10 +78,18 @@ request GET "$API_BASE_URL/auth/me" "$TMP_DIR/me.json" "${auth[@]}"
 assert_json_key "$TMP_DIR/me.json" "username"
 echo "[PASS] authentication"
 
+# Dashboard routes are mounted at the application root, while resource APIs
+# are mounted below /api/v1.
 for endpoint in \
   "/dashboard/overview" \
   "/dashboard/logs" \
-  "/dashboard/metrics" \
+  "/dashboard/metrics"; do
+  safe="$(echo "$endpoint" | tr '/?' '__' | tr -cd '[:alnum:]_-')"
+  request GET "$ROOT_BASE_URL$endpoint" "$TMP_DIR/$safe.json" "${auth[@]}"
+  echo "[PASS] GET $endpoint"
+done
+
+for endpoint in \
   "/dialogs?limit=1" \
   "/sessions" \
   "/webhooks" \
@@ -89,8 +99,6 @@ for endpoint in \
   echo "[PASS] GET $endpoint"
 done
 
-# Verify the two write endpoints without changing production data.
-# Send/forward are intentionally not executed by this smoke test because they have side effects.
 python3 - "$TMP_DIR" <<'PY'
 import json, os, sys
 root = sys.argv[1]
