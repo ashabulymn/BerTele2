@@ -1,102 +1,93 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
+import { api, clearTokens, createApiKey, createSession, createWebhook, deleteApiKey, deleteSession, deleteWebhook, getApiKeys, getDialogs, getMessages, getSessions, getWebhooks, hasToken, login, sendMessage, sessionAction, updateWebhook, type ApiKey, type Dialog, type Message, type Session, type User, type Webhook } from './api'
 
-type IconName = 'grid' | 'send' | 'users' | 'webhook' | 'session' | 'media' | 'key' | 'activity' | 'settings' | 'menu' | 'bell' | 'search' | 'arrow' | 'check' | 'clock' | 'message'
-
-type NavItem = {
-  label: string
-  icon: IconName
-  badge?: string
-}
-
-const navGroups: { title: string; items: NavItem[] }[] = [
-  { title: 'Workspace', items: [{ label: 'Overview', icon: 'grid' }, { label: 'Messages', icon: 'message', badge: '24' }, { label: 'Telegram', icon: 'send' }, { label: 'Sessions', icon: 'session' }] },
-  { title: 'Integrations', items: [{ label: 'Webhooks', icon: 'webhook' }, { label: 'Media', icon: 'media' }, { label: 'API Keys', icon: 'key' }] },
-  { title: 'System', items: [{ label: 'Activity', icon: 'activity' }, { label: 'Users', icon: 'users' }, { label: 'Settings', icon: 'settings' }] },
+type Page = 'Overview' | 'Messages' | 'Telegram' | 'Sessions' | 'Webhooks' | 'API Keys' | 'Activity' | 'Users' | 'Settings'
+const nav: { group: string; items: Page[] }[] = [
+  { group: 'Workspace', items: ['Overview', 'Messages', 'Telegram', 'Sessions'] },
+  { group: 'Integrations', items: ['Webhooks', 'API Keys'] },
+  { group: 'System', items: ['Activity', 'Users', 'Settings'] },
 ]
-
-const activity = [
-  { title: 'Telegram message received', detail: 'BerTele2 Bot · @duitku_robot', time: '2 min ago', type: 'message' },
-  { title: 'Webhook delivered', detail: 'n8n · message.received', time: '7 min ago', type: 'success' },
-  { title: 'Session reconnected', detail: 'telegram-main · +62 •••• 2188', time: '12 min ago', type: 'success' },
-  { title: 'Media download completed', detail: 'telegram-media · 2.4 MB', time: '18 min ago', type: 'success' },
-]
-
-function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
-  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  const paths: Record<IconName, ReactNode> = {
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    send: <><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></>,
-    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
-    webhook: <><path d="M18 8a4 4 0 0 0-7.75-1.25L8.8 9.5" /><path d="M6 16a4 4 0 0 0 7.75 1.25l1.45-2.75" /><path d="m14.5 8.5-5 7" /><path d="M5 12h6" /><path d="M13 12h6" /></>,
-    session: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 8h.01M11 8h.01" /><path d="M7 12h10M7 16h6" /></>,
-    media: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></>,
-    key: <><circle cx="8" cy="15" r="4" /><path d="m10.8 12.2 7.7-7.7a2.1 2.1 0 0 1 3 3l-1.4 1.4-1.5-1.5-1.8 1.8 1.5 1.5-2.2 2.2" /></>,
-    activity: <><path d="M3 12h4l3-8 4 16 3-8h4" /></>,
-    settings: <><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.8 1.8-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.54v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.8-1.8.06-.06A1.7 1.7 0 0 0 8.1 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.54h.54A1.7 1.7 0 0 0 8.1 10.4a1.7 1.7 0 0 0-.34-1.88L7.7 8.46l1.8-1.8.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.47 5.5V5h2.54v.5a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.8 1.8-.06.06A1.7 1.7 0 0 0 19.4 10.4a1.7 1.7 0 0 0 1.56 1.03H21v2.54h-.04A1.7 1.7 0 0 0 19.4 15Z" /></>,
-    menu: <><path d="M4 6h16M4 12h16M4 18h16" /></>,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
-    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
-    arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
-    check: <path d="m5 12 4 4L19 6" />,
-    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-    message: <><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.7 9.7 0 0 1-4.3-1L3 20l1.1-4.1A8.4 8.4 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" /><path d="M8 12h.01M12 12h.01M16 12h.01" /></>,
-  }
-  return <svg {...common} aria-hidden="true">{paths[name]}</svg>
-}
 
 function App() {
-  const [active, setActive] = useState('Overview')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null)
-  const [search, setSearch] = useState('')
-
-  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+  const [page, setPage] = useState<Page>('Overview')
+  const [user, setUser] = useState<User | null>(null)
+  const [online, setOnline] = useState<boolean | null>(null)
+  const [menu, setMenu] = useState(false)
+  const [toast, setToast] = useState('')
 
   useEffect(() => {
-    let mounted = true
-    fetch(`${apiBase}/health`, { headers: { Accept: 'application/json' } })
-      .then((response) => { if (mounted) setApiOnline(response.ok) })
-      .catch(() => { if (mounted) setApiOnline(false) })
-    return () => { mounted = false }
-  }, [apiBase])
-
-  const filteredActivity = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return activity
-    return activity.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(query))
-  }, [search])
-
-  return (
-    <div className="app-shell">
-      {sidebarOpen && <button className="mobile-overlay" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`}>
-        <div className="brand"><div className="brand-mark">B</div><div><strong>BerTele2</strong><span>Control Center</span></div></div>
-        <div className="workspace-switcher"><div className="workspace-avatar">B</div><div><strong>BerTele2 Production</strong><span>Workspace</span></div><span className="chevron">⌄</span></div>
-        <nav>{navGroups.map((group) => <div className="nav-group" key={group.title}><div className="nav-label">{group.title}</div>{group.items.map((item) => <button key={item.label} className={`nav-item ${active === item.label ? 'active' : ''}`} onClick={() => { setActive(item.label); setSidebarOpen(false) }}><Icon name={item.icon} /><span>{item.label}</span>{item.badge && <b>{item.badge}</b>}</button>)}</div>)}</nav>
-        <div className="sidebar-footer"><div className="status-row"><span className={`status-dot ${apiOnline === false ? 'offline' : ''}`} /><span>{apiOnline === false ? 'API offline' : apiOnline === true ? 'API connected' : 'Checking API…'}</span></div><button className="user-card"><div className="avatar">AY</div><div><strong>Admin</strong><span>Administrator</span></div><span>•••</span></button></div>
-      </aside>
-
-      <main className="main">
-        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Icon name="menu" /></button><div className="breadcrumbs"><span>BerTele2</span><i>/</i><strong>{active}</strong></div><div className="top-actions"><label className="search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search activity…" /></label><button className="icon-button notification"><Icon name="bell" /><span /></button><div className="avatar top-avatar">AY</div></div></header>
-
-        <div className="content">
-          <section className="page-heading"><div><div className="eyebrow">CONTROL CENTER</div><h1>{active}</h1><p>{active === 'Overview' ? 'Monitor Telegram, webhooks, media and automation from one place.' : `Manage your ${active.toLowerCase()} from the BerTele2 control center.`}</p></div><div className="heading-actions"><button className="secondary-button">Last 24 hours⌄</button><button className="primary-button" onClick={() => setActive('Messages')}><Icon name="send" size={16} /> Send message</button></div></section>
-
-          {active === 'Overview' ? <>
-            <section className="stats-grid"><Stat label="Messages today" value="1,284" change="+18.4%" tone="green" icon="message" /><Stat label="Active sessions" value="4 / 5" change="80% online" tone="blue" icon="session" /><Stat label="Webhook deliveries" value="98.7%" change="+2.1%" tone="purple" icon="webhook" /><Stat label="Media processed" value="3.8 GB" change="+12.6%" tone="orange" icon="media" /></section>
-            <section className="dashboard-grid"><div className="panel traffic-panel"><div className="panel-header"><div><h2>Message activity</h2><p>Incoming and outgoing messages</p></div><span className="live-pill"><i /> Live</span></div><div className="chart"><div className="chart-y"><span>400</span><span>300</span><span>200</span><span>100</span><span>0</span></div><div className="chart-area"><div className="grid-lines"><i /><i /><i /><i /><i /></div><svg viewBox="0 0 700 240" preserveAspectRatio="none" aria-label="Message activity chart"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".22" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs><path className="area" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35 V240 H0Z" /><path className="line" d="M0 190 C45 178 55 120 95 145 S150 190 185 120 S245 90 280 118 S330 160 370 85 S430 115 470 105 S520 48 555 78 S610 118 650 62 S680 55 700 35" /></svg><div className="chart-x"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span></div></div></div><div className="legend"><span><i className="incoming" /> Incoming <b>842</b></span><span><i className="outgoing" /> Outgoing <b>442</b></span></div></div>
-              <div className="panel health-panel"><div className="panel-header"><div><h2>System health</h2><p>Live service status</p></div><button className="more">•••</button></div><div className="health-score"><div className="score-ring"><strong>98</strong><span>/100</span></div><div><strong>Excellent</strong><p>All critical services are healthy.</p></div></div><div className="service-list"><Service name="Telegram engine" detail="MTProto connection" status="Operational" /><Service name="Webhook dispatcher" detail="Delivery queue" status="Operational" /><Service name="Media pipeline" detail="Storage + processing" status="Operational" /><Service name="n8n integration" detail="Automation bridge" status="Operational" /></div></div></section>
-            <section className="bottom-grid"><div className="panel activity-panel"><div className="panel-header"><div><h2>Recent activity</h2><p>Latest events across your workspace</p></div><button className="link-button" onClick={() => setActive('Activity')}>View all <Icon name="arrow" size={15} /></button></div><div className="activity-list">{filteredActivity.map((item) => <div className="activity-item" key={item.title}><div className={`activity-icon ${item.type}`}><Icon name={item.type === 'message' ? 'message' : 'check'} size={16} /></div><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>)}</div></div><div className="panel quick-panel"><div className="panel-header"><div><h2>Quick actions</h2><p>Common tasks</p></div></div><div className="quick-actions"><QuickAction icon="send" title="Send Telegram message" onClick={() => setActive('Messages')} /><QuickAction icon="webhook" title="Create webhook" onClick={() => setActive('Webhooks')} /><QuickAction icon="session" title="Manage sessions" onClick={() => setActive('Sessions')} /><QuickAction icon="key" title="Create API key" onClick={() => setActive('API Keys')} /></div></div></section>
-          </> : <section className="panel placeholder"><div className="placeholder-icon"><Icon name={navGroups.flatMap((group) => group.items).find((item) => item.label === active)?.icon || 'grid'} size={26} /></div><h2>{active}</h2><p>The UI foundation is ready. This module is connected to the existing BerTele2 API architecture and can be wired to its endpoint without changing the dashboard shell.</p><button className="primary-button" onClick={() => setActive('Overview')}>Back to overview</button></section>}
-        </div>
-      </main>
-    </div>
-  )
+    let active = true
+    api<User>('/auth/me').then((u) => { if (active) setUser(u) }).catch(() => { if (active && hasToken()) clearTokens() })
+    fetch(`${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/health`).then(r => { if (active) setOnline(r.ok) }).catch(() => { if (active) setOnline(false) })
+    return () => { active = false }
+  }, [])
+  const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2600) }
+  if (!user) return <Login onLogin={setUser} />
+  return <div className="app-shell">
+    {menu && <button className="overlay" onClick={() => setMenu(false)} aria-label="Close navigation" />}
+    <aside className={menu ? 'sidebar open' : 'sidebar'}>
+      <div className="brand"><div className="logo">B</div><div><strong>BerTele2</strong><small>Control Center</small></div></div>
+      <div className="workspace"><b>B</b><span><strong>Production</strong><small>BerTele2 workspace</small></span></div>
+      <nav>{nav.map(g => <div className="nav-group" key={g.group}><small>{g.group}</small>{g.items.map(item => <button className={page === item ? 'nav active' : 'nav'} key={item} onClick={() => { setPage(item); setMenu(false) }}><span>{icon(item)}</span>{item}</button>)}</div>)}</nav>
+      <div className="sidebar-bottom"><div className="connection"><i className={online === false ? 'offline' : ''} />{online === true ? 'API connected' : online === false ? 'API offline' : 'Checking API…'}</div><button className="account"><b>{initials(user.full_name || user.username)}</b><span><strong>{user.full_name || user.username}</strong><small>{user.roles.join(', ') || 'User'}</small></span></button></div>
+    </aside>
+    <main className="main">
+      <header className="topbar"><button className="hamburger" onClick={() => setMenu(true)}>☰</button><div className="crumb">BerTele2 <span>/</span> <b>{page}</b></div><div className="top-right"><span className="health-dot"><i className={online === false ? 'offline' : ''} /> {online === false ? 'Offline' : 'Healthy'}</span><b className="avatar">{initials(user.full_name || user.username)}</b></div></header>
+      <div className="content"><Header page={page} />
+        {page === 'Overview' && <Overview onNavigate={setPage} />}
+        {page === 'Messages' && <TelegramConsole mode="messages" notify={notify} />}
+        {page === 'Telegram' && <TelegramConsole mode="telegram" notify={notify} />}
+        {page === 'Sessions' && <Sessions notify={notify} />}
+        {page === 'Webhooks' && <Webhooks notify={notify} />}
+        {page === 'API Keys' && <ApiKeys notify={notify} />}
+        {page === 'Activity' && <Activity />}
+        {page === 'Users' && <Placeholder title="Users" text="User and role management is ready for the existing users API." />}
+        {page === 'Settings' && <Placeholder title="Settings" text="System configuration will be wired here without changing the dashboard shell." />}
+      </div>
+    </main>
+    {toast && <div className="toast">✓ {toast}</div>}
+  </div>
 }
 
-function Stat({ label, value, change, tone, icon }: { label: string; value: string; change: string; tone: string; icon: IconName }) { return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon name={icon} /></div><div className="stat-copy"><span>{label}</span><strong>{value}</strong><small className={tone === 'green' || tone === 'blue' ? 'positive' : ''}>{change}</small></div><span className="stat-period">Today</span></div> }
-function Service({ name, detail, status }: { name: string; detail: string; status: string }) { return <div className="service"><div className="service-status"><i /></div><div><strong>{name}</strong><span>{detail}</span></div><b>{status}</b></div> }
-function QuickAction({ icon, title, onClick }: { icon: IconName; title: string; onClick: () => void }) { return <button className="quick-action" onClick={onClick}><span><Icon name={icon} size={17} /></span><strong>{title}</strong><Icon name="arrow" size={15} /></button> }
+function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { onLogin(await login(username, password)) } catch (err) { setError(err instanceof Error ? err.message : 'Login failed') } finally { setBusy(false) } }
+  return <div className="login-page"><div className="login-card"><div className="login-brand"><div className="logo">B</div><div><strong>BerTele2</strong><small>Control Center</small></div></div><h1>Welcome back</h1><p>Sign in to manage your Telegram and automation workspace.</p><form onSubmit={submit}><label>Username<input value={username} onChange={e => setUsername(e.target.value)} required autoComplete="username" /></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" /></label>{error && <div className="error">{error}</div>}<button className="primary full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button></form></div></div>
+}
+
+function Header({ page }: { page: Page }) { return <section className="page-head"><div><small>CONTROL CENTER</small><h1>{page}</h1><p>{page === 'Overview' ? 'Monitor Telegram, webhooks, media and automation from one place.' : `Manage ${page.toLowerCase()} with the live BerTele2 API.`}</p></div></section> }
+
+function Overview({ onNavigate }: { onNavigate: (p: Page) => void }) { return <><div className="stats"><Stat label="Messages today" value="Live" detail="Telegram message stream" /><Stat label="Sessions" value="Manage" detail="Connect / disconnect accounts" /><Stat label="Webhooks" value="CRUD" detail="Events + delivery targets" /><Stat label="API Keys" value="Secure" detail="Create and revoke keys" /></div><div className="grid-two"><Panel title="Phase 2 modules"><div className="module-list">{['Messages & Telegram','Sessions','Webhooks','API Keys'].map((x,i)=><button key={x} onClick={()=>onNavigate((['Messages','Sessions','Webhooks','API Keys'] as Page[])[i])}><span>{icon(x)}</span><div><b>{x}</b><small>Connected to existing backend endpoints</small></div><em>→</em></button>)}</div></Panel><Panel title="Backend capabilities"><ul className="capabilities"><li>Telegram dialogs and message history</li><li>Send and forward messages</li><li>Webhook CRUD and event filters</li><li>Session lifecycle controls</li><li>API key creation and revocation</li><li>Automatic bearer-token refresh</li></ul></Panel></div></> }
+
+function TelegramConsole({ mode, notify }: { mode: 'messages' | 'telegram'; notify: (s:string)=>void }) {
+  const [dialogs, setDialogs] = useState<Dialog[]>([]); const [selected, setSelected] = useState<Dialog | null>(null); const [messages, setMessages] = useState<Message[]>([]); const [text, setText] = useState(''); const [loading, setLoading] = useState(true); const [search, setSearch] = useState(''); const [forwardIds, setForwardIds] = useState<number[]>([]); const [target, setTarget] = useState('')
+  const loadDialogs = () => { setLoading(true); getDialogs(100).then(r => setDialogs(r.items)).catch(()=>notify('Unable to load Telegram dialogs')).finally(()=>setLoading(false)) }
+  useEffect(loadDialogs, [])
+  useEffect(() => { if (!selected) { setMessages([]); return }; getMessages(selected.id, 100).then(r => setMessages(r.items.reverse())).catch(()=>notify('Unable to load messages')) }, [selected])
+  const filtered = useMemo(() => dialogs.filter(d => `${d.name || ''} ${d.peer.username || ''}`.toLowerCase().includes(search.toLowerCase())), [dialogs, search])
+  async function send() { if (!text.trim() || !selected) return; try { await sendMessage(selected.peer.username ? `@${selected.peer.username}` : String(selected.id), text.trim()); setText(''); notify('Message sent'); const r=await getMessages(selected.id,100); setMessages(r.items.reverse()) } catch { notify('Send failed') } }
+  async function forward() { if (!selected || !target || !forwardIds.length) return; try { await import('./api').then(m=>m.forwardMessages(String(selected.id), target, forwardIds)); setForwardIds([]); notify('Message forwarded') } catch { notify('Forward failed') } }
+  return <div className="telegram-layout"><section className="panel dialogs"><div className="panel-title"><div><b>Telegram</b><small>{dialogs.length} dialogs</small></div><button onClick={loadDialogs}>↻</button></div><input className="search-input" placeholder="Search dialogs…" value={search} onChange={e=>setSearch(e.target.value)} />{loading?<Empty text="Loading dialogs…"/>:<div className="dialog-list">{filtered.map(d=><button className={selected?.id===d.id?'dialog active':'dialog'} key={d.id} onClick={()=>setSelected(d)}><b>{initials(d.name || d.peer.username || 'TG')}</b><span><strong>{d.name || d.peer.title || d.peer.username || d.id}</strong><small>{d.peer.username ? '@'+d.peer.username : d.peer.type}</small></span>{d.unread_count ? <em>{d.unread_count}</em>:null}</button>)}</div>}</section><section className="panel chat"><div className="chat-head">{selected?<><b>{selected.name || selected.peer.username || selected.id}</b><small>{selected.peer.username ? '@'+selected.peer.username : selected.peer.type}</small></>:<b>Select a dialog</b>}</div><div className="messages">{!selected?<Empty text="Choose a Telegram dialog to view messages."/>:messages.length?messages.map(m=><button className={m.out?'bubble out':'bubble'} key={m.id} onClick={()=>setForwardIds(ids=>ids.includes(m.id)?ids.filter(x=>x!==m.id):[...ids,m.id])}><span>{m.text || '[media / non-text message]'}</span><small>{m.date ? new Date(m.date).toLocaleString() : ''}{forwardIds.includes(m.id)?' · selected':''}</small></button>):<Empty text="No messages found."/>}</div>{selected&&<div className="composer"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Write a message…" /><button className="primary" onClick={send}>Send</button></div>}{selected&&forwardIds.length>0&&<div className="forward-bar"><span>{forwardIds.length} selected</span><input value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target @username or peer id"/><button onClick={forward}>Forward</button></div>}</section></div>
+}
+
+function Sessions({ notify }: { notify: (s:string)=>void }) { const [items,setItems]=useState<Session[]>([]); const [show,setShow]=useState(false); const [form,setForm]=useState({name:'',api_id:'',api_hash:'',session_string:'',phone_number:'',bot_token:''}); const load=()=>getSessions().then(r=>setItems(r.items)).catch(()=>notify('Unable to load sessions')); useEffect(load,[]); async function submit(e:FormEvent){e.preventDefault();try{await createSession({name:form.name,api_id:Number(form.api_id),api_hash:form.api_hash,session_string:form.session_string||undefined,phone_number:form.phone_number||undefined,bot_token:form.bot_token||undefined});setShow(false);setForm({...form,name:'',api_id:'',api_hash:'',session_string:'',phone_number:'',bot_token:''});load();notify('Session created')}catch(err){notify(err instanceof Error?err.message:'Create failed')}} return <><div className="toolbar"><button className="primary" onClick={()=>setShow(true)}>+ Add session</button></div><div className="cards-list">{items.map(s=><div className="resource-card" key={s.id}><div><b>{s.name}</b><small>API ID {s.api_id} · {s.phone_number || (s.bot_token?'Bot':'Session string configured')}</small></div><Status value={s.state}/><div className="actions">{s.state==='connected'?<button onClick={()=>sessionAction(s.id,'disconnect').then(load).then(()=>notify('Session disconnected'))}>Disconnect</button>:<button onClick={()=>sessionAction(s.id,'connect').then(load).then(()=>notify('Session connected'))}>Connect</button>}<button onClick={()=>sessionAction(s.id,'reconnect').then(load).then(()=>notify('Reconnect requested'))}>Reconnect</button><button className="danger" onClick={()=>deleteSession(s.id).then(load).then(()=>notify('Session deleted'))}>Delete</button></div>{s.last_error&&<div className="error small">{s.last_error}</div>}</div>)}{!items.length&&<Empty text="No sessions configured."/>}</div>{show&&<Modal title="Add Telegram session" onClose={()=>setShow(false)}><form className="form-grid" onSubmit={submit}>{[['name','Name'],['api_id','API ID'],['api_hash','API Hash'],['session_string','Session string'],['phone_number','Phone number'],['bot_token','Bot token']].map(([k,l])=><label key={k}>{l}<input value={form[k as keyof typeof form]} onChange={e=>setForm({...form,[k]:e.target.value})} required={k==='name'||k==='api_id'||k==='api_hash'} /></label>)}<button className="primary full">Create session</button></form></Modal>}</> }
+
+function Webhooks({ notify }: { notify:(s:string)=>void }) { const [items,setItems]=useState<Webhook[]>([]); const [editing,setEditing]=useState<Webhook|null>(null); const [show,setShow]=useState(false); const blank={name:'',url:'',secret:'',is_active:true,event_names:[] as string[]}; const [form,setForm]=useState(blank); const load=()=>getWebhooks().then(r=>setItems(r.items)).catch(()=>notify('Unable to load webhooks')); useEffect(load,[]); const open=(w?:Webhook)=>{setEditing(w||null);setForm(w?{name:w.name,url:w.url,secret:'',is_active:w.is_active,event_names:w.event_names}:blank);setShow(true)}; async function submit(e:FormEvent){e.preventDefault();try{if(editing) await updateWebhook(editing.id,form); else await createWebhook(form);setShow(false);load();notify(editing?'Webhook updated':'Webhook created')}catch(err){notify(err instanceof Error?err.message:'Save failed')}} return <><div className="toolbar"><button className="primary" onClick={()=>open()}>+ Add webhook</button></div><div className="cards-list">{items.map(w=><div className="resource-card" key={w.id}><div><b>{w.name}</b><small>{w.url}</small><small>Events: {w.event_names.join(', ') || 'all configured events'}</small></div><Status value={w.is_active?'active':'inactive'}/><div className="actions"><button onClick={()=>open(w)}>Edit</button><button onClick={()=>updateWebhook(w.id,{is_active:!w.is_active}).then(load).then(()=>notify('Webhook status updated'))}>{w.is_active?'Disable':'Enable'}</button><button className="danger" onClick={()=>deleteWebhook(w.id).then(load).then(()=>notify('Webhook deleted'))}>Delete</button></div></div>)}{!items.length&&<Empty text="No webhooks configured."/>}</div>{show&&<Modal title={editing?'Edit webhook':'Add webhook'} onClose={()=>setShow(false)}><form className="form-grid" onSubmit={submit}><label>Name<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></label><label>URL<input value={form.url} onChange={e=>setForm({...form,url:e.target.value})} required/></label><label>Secret{editing?<small>Leave empty to keep existing secret.</small>:null}<input value={form.secret} onChange={e=>setForm({...form,secret:e.target.value})} required={!editing}/></label><label>Event names <small>comma separated</small><input value={form.event_names.join(', ')} onChange={e=>setForm({...form,event_names:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)})}/></label><label className="check"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> Active</label><button className="primary full">Save webhook</button></form></Modal>}</> }
+
+function ApiKeys({ notify }: {notify:(s:string)=>void}) { const [items,setItems]=useState<ApiKey[]>([]); const [name,setName]=useState(''); const [secret,setSecret]=useState(''); const load=()=>getApiKeys().then(setItems).catch(()=>notify('Unable to load API keys')); useEffect(load,[]); async function create(){if(!name.trim())return;try{const data=await createApiKey(name.trim());setSecret(data.key);setName('');load();notify('API key created — copy it now')}catch(err){notify(err instanceof Error?err.message:'Create failed')}} return <><div className="key-create"><input placeholder="New key name" value={name} onChange={e=>setName(e.target.value)}/><button className="primary" onClick={create}>Create API key</button></div>{secret&&<div className="secret-box"><b>New API key — shown once</b><code>{secret}</code><button onClick={()=>navigator.clipboard?.writeText(secret)}>Copy</button><button onClick={()=>setSecret('')}>Dismiss</button></div>}<div className="cards-list">{items.map(k=><div className="resource-card" key={k.id}><div><b>{k.name}</b><small>{k.prefix} · created {k.created_at?new Date(k.created_at).toLocaleString():'—'}</small><small>{k.last_used_at?`Last used ${new Date(k.last_used_at).toLocaleString()}`:'Never used'}</small></div><Status value={k.is_active?'active':'revoked'}/><button className="danger" onClick={()=>deleteApiKey(k.id).then(load).then(()=>notify('API key revoked'))}>Revoke</button></div>)}{!items.length&&<Empty text="No API keys found."/>}</div></> }
+
+function Activity(){return <Panel title="Activity"><div className="activity-feed">{['Telegram message pipeline','Webhook dispatcher','Session lifecycle','API key service'].map((x,i)=><div key={x}><b>{x}</b><small>{i===0?'Message events are emitted through the Telegram pipeline.':'Operational event stream ready for live audit entries.'}</small><span>{i+2} min ago</span></div>)}</div></Panel>}
+function Placeholder({title,text}:{title:string;text:string}){return <Panel title={title}><Empty text={text}/></Panel>}
+function Stat({label,value,detail}:{label:string;value:string;detail:string}){return <div className="stat"><small>{label}</small><strong>{value}</strong><span>{detail}</span></div>}
+function Panel({title,children}:{title:string;children:ReactNode}){return <section className="panel"><div className="panel-title"><div><h2>{title}</h2></div></div>{children}</section>}
+function Status({value}:{value:string}){return <span className={`status ${value.toLowerCase().replace(/\s/g,'-')}`}>{value}</span>}
+function Empty({text}:{text:string}){return <div className="empty">{text}</div>}
+function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</div></div>}
+function initials(value:string){return value.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()}
+function icon(label:string){const map:Record<string,string>={Overview:'⌂',Messages:'▣',Telegram:'➤',Sessions:'▤',Webhooks:'↔', 'API Keys':'⌕',Activity:'⌁',Users:'♙',Settings:'⚙'};return map[label]||'•'}
 
 export default App
