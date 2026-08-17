@@ -3,31 +3,13 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 let accessToken = localStorage.getItem('bertele2_access_token') || ''
 let refreshToken = localStorage.getItem('bertele2_refresh_token') || ''
 
-export function setTokens(access: string, refresh: string) {
-  accessToken = access
-  refreshToken = refresh
-  localStorage.setItem('bertele2_access_token', access)
-  localStorage.setItem('bertele2_refresh_token', refresh)
-}
-
-export function clearTokens() {
-  accessToken = ''
-  refreshToken = ''
-  localStorage.removeItem('bertele2_access_token')
-  localStorage.removeItem('bertele2_refresh_token')
-}
-
-export function hasToken() {
-  return Boolean(accessToken)
-}
+export function setTokens(access: string, refresh: string) { accessToken = access; refreshToken = refresh; localStorage.setItem('bertele2_access_token', access); localStorage.setItem('bertele2_refresh_token', refresh) }
+export function clearTokens() { accessToken = ''; refreshToken = ''; localStorage.removeItem('bertele2_access_token'); localStorage.removeItem('bertele2_refresh_token') }
+export function hasToken() { return Boolean(accessToken) }
 
 async function refresh() {
   if (!refreshToken) return false
-  const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
+  const response = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: refreshToken }) })
   if (!response.ok) return false
   const data = await response.json()
   setTokens(data.access_token, data.refresh_token)
@@ -51,9 +33,7 @@ export async function api<T>(path: string, options: RequestInit = {}, retry = tr
 }
 
 export async function login(username: string, password: string) {
-  const data = await api<{ access_token: string; refresh_token: string; user: User }>('/auth/login', {
-    method: 'POST', body: JSON.stringify({ username, password }),
-  }, false)
+  const data = await api<{ access_token: string; refresh_token: string; user: User }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }, false)
   setTokens(data.access_token, data.refresh_token)
   return data.user
 }
