@@ -1,122 +1,87 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
+import { api, clearTokens, createApiKey, createSession, createWebhook, deleteApiKey, deleteSession, deleteWebhook, getApiKeys, getDialogs, getMessages, getSessions, getWebhooks, hasToken, login, sendMessage, sessionAction, updateWebhook, type ApiKey, type Dialog, type Message, type Session, type User, type Webhook } from './api'
+
+type Page = 'Overview' | 'Messages' | 'Telegram' | 'Sessions' | 'Webhooks' | 'API Keys' | 'Activity' | 'Users' | 'Settings'
+const nav: { group: string; items: Page[] }[] = [
+  { group: 'Workspace', items: ['Overview', 'Messages', 'Telegram', 'Sessions'] },
+  { group: 'Integrations', items: ['Webhooks', 'API Keys'] },
+  { group: 'System', items: ['Activity', 'Users', 'Settings'] },
+]
 
 function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  const [page, setPage] = useState<Page>('Overview')
+  const [user, setUser] = useState<User | null>(null)
+  const [online, setOnline] = useState<boolean | null>(null)
+  const [menu, setMenu] = useState(false)
+  const [toast, setToast] = useState('')
+  useEffect(() => {
+    let active = true
+    api<User>('/auth/me').then((u) => { if (active) setUser(u) }).catch(() => { if (active && hasToken()) clearTokens() })
+    fetch(`${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/health`).then(r => { if (active) setOnline(r.ok) }).catch(() => { if (active) setOnline(false) })
+    return () => { active = false }
+  }, [])
+  const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2600) }
+  if (!user) return <Login onLogin={setUser} />
+  return <div className="app-shell">
+    {menu && <button className="overlay" onClick={() => setMenu(false)} aria-label="Close navigation" />}
+    <aside className={menu ? 'sidebar open' : 'sidebar'}>
+      <div className="brand"><div className="logo">B</div><div><strong>BerTele2</strong><small>Control Center</small></div></div>
+      <div className="workspace"><b>B</b><span><strong>Production</strong><small>BerTele2 workspace</small></span></div>
+      <nav>{nav.map(g => <div className="nav-group" key={g.group}><small>{g.group}</small>{g.items.map(item => <button className={page === item ? 'nav active' : 'nav'} key={item} onClick={() => { setPage(item); setMenu(false) }}><span>{icon(item)}</span>{item}</button>)}</div>)}</nav>
+      <div className="sidebar-bottom"><div className="connection"><i className={online === false ? 'offline' : ''} />{online === true ? 'API connected' : online === false ? 'API offline' : 'Checking API…'}</div><button className="account"><b>{initials(user.full_name || user.username)}</b><span><strong>{user.full_name || user.username}</strong><small>{user.roles.join(', ') || 'User'}</small></span></button></div>
+    </aside>
+    <main className="main">
+      <header className="topbar"><button className="hamburger" onClick={() => setMenu(true)} aria-label="Open navigation">☰</button><div className="crumb">BerTele2 <span>/</span> <b>{page}</b></div><div className="top-right"><span className="health-dot"><i className={online === false ? 'offline' : ''} /> {online === false ? 'Offline' : 'Healthy'}</span><b className="avatar">{initials(user.full_name || user.username)}</b></div></header>
+      <div className="content"><Header page={page} />
+        {page === 'Overview' && <Overview onNavigate={setPage} />}
+        {page === 'Messages' && <TelegramConsole mode="messages" notify={notify} />}
+        {page === 'Telegram' && <TelegramConsole mode="telegram" notify={notify} />}
+        {page === 'Sessions' && <Sessions notify={notify} />}
+        {page === 'Webhooks' && <Webhooks notify={notify} />}
+        {page === 'API Keys' && <ApiKeys notify={notify} />}
+        {page === 'Activity' && <Activity />}
+        {page === 'Users' && <Placeholder title="Users" text="User and role management is ready for the existing users API." />}
+        {page === 'Settings' && <Placeholder title="Settings" text="System configuration will be wired here without changing the dashboard shell." />}
+      </div>
+    </main>
+    {toast && <div className="toast">✓ {toast}</div>}
+  </div>
 }
+
+function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('')
+  async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { onLogin(await login(username, password)) } catch (err) { setError(err instanceof Error ? err.message : 'Login failed') } finally { setBusy(false) } }
+  return <div className="login-page"><div className="login-card"><div className="login-brand"><div className="logo">B</div><div><strong>BerTele2</strong><small>Control Center</small></div></div><h1>Welcome back</h1><p>Sign in to manage your Telegram and automation workspace.</p><form onSubmit={submit}><label>Username<input value={username} onChange={e => setUsername(e.target.value)} required autoComplete="username" /></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" /></label>{error && <div className="error">{error}</div>}<button className="primary full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button></form></div></div>
+}
+
+function Header({ page }: { page: Page }) { return <section className="page-head"><div><small>CONTROL CENTER</small><h1>{page}</h1><p>{page === 'Overview' ? 'Monitor Telegram, webhooks, media and automation from one place.' : `Manage ${page.toLowerCase()} with the live BerTele2 API.`}</p></div></section> }
+function Overview({ onNavigate }: { onNavigate: (p: Page) => void }) { return <><div className="stats"><Stat label="Messages today" value="Live" detail="Telegram message stream" /><Stat label="Sessions" value="Manage" detail="Connect / disconnect accounts" /><Stat label="Webhooks" value="CRUD" detail="Events + delivery targets" /><Stat label="API Keys" value="Secure" detail="Create and revoke keys" /></div><div className="grid-two"><Panel title="Phase 2 modules"><div className="module-list">{['Messages & Telegram','Sessions','Webhooks','API Keys'].map((x,i)=><button key={x} onClick={()=>onNavigate((['Messages','Sessions','Webhooks','API Keys'] as Page[])[i])}><span>{icon(x)}</span><div><b>{x}</b><small>Connected to existing backend endpoints</small></div><em>→</em></button>)}</div></Panel><Panel title="Backend capabilities"><ul className="capabilities"><li>Telegram dialogs and message history</li><li>Send and forward messages</li><li>Webhook CRUD and event filters</li><li>Session lifecycle controls</li><li>API key creation and revocation</li><li>Automatic bearer-token refresh</li></ul></Panel></div></> }
+
+function TelegramConsole({ mode, notify }: { mode: 'messages' | 'telegram'; notify: (s:string)=>void }) {
+  const [dialogs, setDialogs] = useState<Dialog[]>([]); const [selected, setSelected] = useState<Dialog | null>(null); const [messages, setMessages] = useState<Message[]>([]); const [text, setText] = useState(''); const [loading, setLoading] = useState(true); const [search, setSearch] = useState(''); const [forwardIds, setForwardIds] = useState<number[]>([]); const [target, setTarget] = useState('')
+  const loadDialogs = () => { setLoading(true); getDialogs(100).then(r => setDialogs(r.items)).catch(()=>notify('Unable to load Telegram dialogs')).finally(()=>setLoading(false)) }
+  useEffect(loadDialogs, [])
+  useEffect(() => { if (!selected) { setMessages([]); return }; getMessages(selected.id, 100).then(r => setMessages(r.items.reverse())).catch(()=>notify('Unable to load messages')) }, [selected])
+  const filtered = useMemo(() => dialogs.filter(d => `${d.name || ''} ${d.peer.username || ''}`.toLowerCase().includes(search.toLowerCase())), [dialogs, search])
+  async function send() { if (!text.trim() || !selected) return; try { await sendMessage(selected.peer.username ? `@${selected.peer.username}` : String(selected.id), text.trim()); setText(''); notify('Message sent'); const r=await getMessages(selected.id,100); setMessages(r.items.reverse()) } catch { notify('Send failed') } }
+  async function forward() { if (!selected || !target || !forwardIds.length) return; try { const { forwardMessages } = await import('./api'); await forwardMessages(String(selected.id), target, forwardIds); setForwardIds([]); notify('Message forwarded') } catch { notify('Forward failed') } }
+  return <div className="telegram-layout" data-mode={mode}><section className="panel dialogs"><div className="panel-title"><div><b>Telegram</b><small>{dialogs.length} dialogs</small></div><button onClick={loadDialogs}>↻</button></div><input className="search-input" placeholder="Search dialogs…" value={search} onChange={e=>setSearch(e.target.value)} />{loading?<Empty text="Loading dialogs…"/>:<div className="dialog-list">{filtered.map(d=><button className={selected?.id===d.id?'dialog active':'dialog'} key={d.id} onClick={()=>setSelected(d)}><b>{initials(d.name || d.peer.username || 'TG')}</b><span><strong>{d.name || d.peer.title || d.peer.username || d.id}</strong><small>{d.peer.username ? '@'+d.peer.username : d.peer.type}</small></span>{d.unread_count ? <em>{d.unread_count}</em>:null}</button>)}</div>}</section><section className="panel chat"><div className="chat-head">{selected?<><b>{selected.name || selected.peer.username || selected.id}</b><small>{selected.peer.username ? '@'+selected.peer.username : selected.peer.type}</small></>:<b>Select a dialog</b>}</div><div className="messages">{!selected?<Empty text="Choose a Telegram dialog to view messages."/>:messages.length?messages.map(m=><button className={m.out?'bubble out':'bubble'} key={m.id} onClick={()=>setForwardIds(ids=>ids.includes(m.id)?ids.filter(x=>x!==m.id):[...ids,m.id])}><span>{m.text || '[media / non-text message]'}</span><small>{m.date ? new Date(m.date).toLocaleString() : ''}{forwardIds.includes(m.id)?' · selected':''}</small></button>):<Empty text="No messages found."/>}</div>{selected&&<div className="composer"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Write a message…" /><button className="primary" onClick={send}>Send</button></div>}{selected&&forwardIds.length>0&&<div className="forward-bar"><span>{forwardIds.length} selected</span><input value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target @username or peer id"/><button onClick={forward}>Forward</button></div>}</section></div>
+}
+
+function Sessions({ notify }: { notify: (s:string)=>void }) { const [items,setItems]=useState<Session[]>([]); const [show,setShow]=useState(false); const [form,setForm]=useState({name:'',api_id:'',api_hash:'',session_string:'',phone_number:'',bot_token:''}); const load=()=>getSessions().then(r=>setItems(r.items)).catch(()=>notify('Unable to load sessions')); useEffect(load,[]); async function submit(e:FormEvent){e.preventDefault();try{await createSession({name:form.name,api_id:Number(form.api_id),api_hash:form.api_hash,session_string:form.session_string||undefined,phone_number:form.phone_number||undefined,bot_token:form.bot_token||undefined});setShow(false);setForm({...form,name:'',api_id:'',api_hash:'',session_string:'',phone_number:'',bot_token:''});load();notify('Session created')}catch(err){notify(err instanceof Error?err.message:'Create failed')}} return <><div className="toolbar"><button className="primary" onClick={()=>setShow(true)}>+ Add session</button></div><div className="cards-list">{items.map(s=><div className="resource-card" key={s.id}><div><b>{s.name}</b><small>API ID {s.api_id} · {s.phone_number || (s.bot_token?'Bot':'Session string configured')}</small></div><Status value={s.state}/><div className="actions">{s.state==='connected'?<button onClick={()=>sessionAction(s.id,'disconnect').then(load).then(()=>notify('Session disconnected'))}>Disconnect</button>:<button onClick={()=>sessionAction(s.id,'connect').then(load).then(()=>notify('Session connected'))}>Connect</button>}<button onClick={()=>sessionAction(s.id,'reconnect').then(load).then(()=>notify('Reconnect requested'))}>Reconnect</button><button className="danger" onClick={()=>deleteSession(s.id).then(load).then(()=>notify('Session deleted'))}>Delete</button></div>{s.last_error&&<div className="error small">{s.last_error}</div>}</div>)}{!items.length&&<Empty text="No sessions configured."/>}</div>{show&&<Modal title="Add Telegram session" onClose={()=>setShow(false)}><form className="form-grid" onSubmit={submit}>{[['name','Name'],['api_id','API ID'],['api_hash','API Hash'],['session_string','Session string'],['phone_number','Phone number'],['bot_token','Bot token']].map(([k,l])=><label key={k}>{l}<input value={form[k as keyof typeof form]} onChange={e=>setForm({...form,[k]:e.target.value})} required={k==='name'||k==='api_id'||k==='api_hash'} /></label>)}<button className="primary full">Create session</button></form></Modal>}</> }
+
+function Webhooks({ notify }: { notify:(s:string)=>void }) { const [items,setItems]=useState<Webhook[]>([]); const [editing,setEditing]=useState<Webhook|null>(null); const [show,setShow]=useState(false); const blank={name:'',url:'',secret:'',is_active:true,event_names:[] as string[]}; const [form,setForm]=useState(blank); const load=()=>getWebhooks().then(r=>setItems(r.items)).catch(()=>notify('Unable to load webhooks')); useEffect(load,[]); const open=(w?:Webhook)=>{setEditing(w||null);setForm(w?{name:w.name,url:w.url,secret:'',is_active:w.is_active,event_names:w.event_names}:blank);setShow(true)}; async function submit(e:FormEvent){e.preventDefault();try{if(editing) await updateWebhook(editing.id,form); else await createWebhook(form);setShow(false);load();notify(editing?'Webhook updated':'Webhook created')}catch(err){notify(err instanceof Error?err.message:'Save failed')}} return <><div className="toolbar"><button className="primary" onClick={()=>open()}>+ Add webhook</button></div><div className="cards-list">{items.map(w=><div className="resource-card" key={w.id}><div><b>{w.name}</b><small>{w.url}</small><small>Events: {w.event_names.join(', ') || 'all configured events'}</small></div><Status value={w.is_active?'active':'inactive'}/><div className="actions"><button onClick={()=>open(w)}>Edit</button><button onClick={()=>updateWebhook(w.id,{is_active:!w.is_active}).then(load).then(()=>notify('Webhook status updated'))}>{w.is_active?'Disable':'Enable'}</button><button className="danger" onClick={()=>deleteWebhook(w.id).then(load).then(()=>notify('Webhook deleted'))}>Delete</button></div></div>)}{!items.length&&<Empty text="No webhooks configured."/>}</div>{show&&<Modal title={editing?'Edit webhook':'Add webhook'} onClose={()=>setShow(false)}><form className="form-grid" onSubmit={submit}><label>Name<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></label><label>URL<input value={form.url} onChange={e=>setForm({...form,url:e.target.value})} required/></label><label>Secret{editing?<small>Leave empty to keep existing secret.</small>:null}<input value={form.secret} onChange={e=>setForm({...form,secret:e.target.value})} required={!editing}/></label><label>Event names <small>comma separated</small><input value={form.event_names.join(', ')} onChange={e=>setForm({...form,event_names:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)})}/></label><label className="check"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> Active</label><button className="primary full">Save webhook</button></form></Modal>}</> }
+
+function ApiKeys({ notify }: {notify:(s:string)=>void}) { const [items,setItems]=useState<ApiKey[]>([]); const [name,setName]=useState(''); const [secret,setSecret]=useState(''); const load=()=>getApiKeys().then(setItems).catch(()=>notify('Unable to load API keys')); useEffect(load,[]); async function create(){if(!name.trim())return;try{const data=await createApiKey(name.trim());setSecret(data.key);setName('');load();notify('API key created — copy it now')}catch(err){notify(err instanceof Error?err.message:'Create failed')}} return <><div className="key-create"><input placeholder="New key name" value={name} onChange={e=>setName(e.target.value)}/><button className="primary" onClick={create}>Create API key</button></div>{secret&&<div className="secret-box"><b>New API key — shown once</b><code>{secret}</code><button onClick={()=>navigator.clipboard?.writeText(secret)}>Copy</button><button onClick={()=>setSecret('')}>Dismiss</button></div>}<div className="cards-list">{items.map(k=><div className="resource-card" key={k.id}><div><b>{k.name}</b><small>{k.prefix} · created {k.created_at?new Date(k.created_at).toLocaleString():'—'}</small><small>{k.last_used_at?`Last used ${new Date(k.last_used_at).toLocaleString()}`:'Never used'}</small></div><Status value={k.is_active?'active':'revoked'}/><button className="danger" onClick={()=>deleteApiKey(k.id).then(load).then(()=>notify('API key revoked'))}>Revoke</button></div>)}{!items.length&&<Empty text="No API keys found."/>}</div></> }
+function Activity(){return <Panel title="Activity"><div className="activity-feed">{['Telegram message pipeline','Webhook dispatcher','Session lifecycle','API key service'].map((x,i)=><div key={x}><b>{x}</b><small>{i===0?'Message events are emitted through the Telegram pipeline.':'Operational event stream ready for live audit entries.'}</small><span>{i+2} min ago</span></div>)}</div></Panel>}
+function Placeholder({title,text}:{title:string;text:string}){return <Panel title={title}><Empty text={text}/></Panel>}
+function Stat({label,value,detail}:{label:string;value:string;detail:string}){return <div className="stat"><small>{label}</small><strong>{value}</strong><span>{detail}</span></div>}
+function Panel({title,children}:{title:string;children:ReactNode}){return <section className="panel"><div className="panel-title"><div><h2>{title}</h2></div></div>{children}</section>}
+function Status({value}:{value:string}){return <span className={`status ${value.toLowerCase().replace(/\s/g,'-')}`}>{value}</span>}
+function Empty({text}:{text:string}){return <div className="empty">{text}</div>}
+function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose} aria-label="Close dialog">×</button></div>{children}</div></div>}
+function initials(value:string){return value.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()}
+function icon(label:string){const map:Record<string,string>={Overview:'⌂',Messages:'▣',Telegram:'➤',Sessions:'▤',Webhooks:'↔', 'API Keys':'⌕',Activity:'⌁',Users:'♙',Settings:'⚙','Messages & Telegram':'➤'};return map[label]||'•'}
 
 export default App
