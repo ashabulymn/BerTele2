@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 DEPLOY_SHA="${1:?missing commit SHA}"
-PROJECT_DIR="${2:?missing project directory}"
+PROJECT_DIR="/etc/dokploy/compose/apps-bertele2-qbabwx/code"
 EXPECTED_BRANCH="main"
 COMPOSE_PROJECT="apps-bertele2-qbabwx"
 SERVICE="bertele2"
@@ -51,7 +51,6 @@ cd "$PROJECT_DIR"
 CURRENT_BRANCH="$(git branch --show-current)"
 [[ "$CURRENT_BRANCH" == "$EXPECTED_BRANCH" ]] || { log "ERROR: expected branch $EXPECTED_BRANCH, found $CURRENT_BRANCH" >&2; exit 1; }
 
-# Never destroy tracked local production edits.
 if ! git diff --quiet || ! git diff --cached --quiet; then
   git status --short >&2 || true
   log 'ERROR: tracked local changes exist; refusing deployment' >&2
@@ -78,13 +77,9 @@ fi
 log "Deploying commit $DEPLOY_SHA"
 git reset --hard "$DEPLOY_SHA"
 
-log 'Validating Compose configuration'
 docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml config --quiet
 
-log "Building $SERVICE"
 docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml build --pull "$SERVICE"
-
-log "Starting $SERVICE"
 docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml up -d --no-build "$SERVICE"
 
 log 'Waiting for health endpoint'
