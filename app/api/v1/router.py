@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
@@ -10,6 +8,7 @@ from app.api.v1.endpoints import (
     health,
     messages,
     meta,
+    plugins,
     sessions,
     telegram,
     users,
@@ -29,6 +28,7 @@ router.include_router(telegram.router, tags=["telegram"])
 router.include_router(messages.router, tags=["messages"])
 router.include_router(sessions.router, tags=["sessions"])
 router.include_router(webhooks.router, tags=["webhooks"])
+router.include_router(plugins.router, tags=["plugins"])
 router.include_router(media_router, tags=["media"])
 router.include_router(telegram_media_router, tags=["telegram-media"])
 router.include_router(gowa_media.router, tags=["gowa-media"])
