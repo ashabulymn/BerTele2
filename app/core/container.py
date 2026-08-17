@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -13,6 +11,7 @@ from app.integrations.webhook.manager import WebhookManager
 from app.integrations.webhook.repository import WebhookRepository
 from app.integrations.webhook.retry import WebhookRetryPolicy
 from app.integrations.webhook.signer import WebhookSigner
+from app.plugins.manager import PluginManager
 from app.services.telegram_service import TelegramService
 from app.session.manager import SessionManager
 from app.session.repository import SessionRepository
@@ -36,6 +35,7 @@ class AppContainer:
         )
         self.webhook_retry_policy = WebhookRetryPolicy()
         self.webhook_signer = WebhookSigner()
+        self.plugin_manager = PluginManager(event_broker=self.event_broker, logger=self.logger)
 
     def session_service(self, session: AsyncSession) -> SessionService:
         storage = SessionStorage(session)
