@@ -12,20 +12,20 @@ export type DialogPeer = { id: number; type: string; title?: string; username?: 
 export type Dialog = { id: number; peer: DialogPeer; name?: string; unread_count?: number; folder_id?: number; pinned?: boolean; archived?: boolean; raw: Record<string, unknown> }
 export type Message = { id: number; dialog_id: number; sender_id?: number; text?: string; date?: string; out?: boolean; grouped_id?: number; reply_to_msg_id?: number; fwd_from?: Record<string, unknown>; raw: Record<string, unknown> }
 export type Webhook = { id: number; name: string; url: string; is_active: boolean; created_at: string; updated_at?: string; event_names: string[] }
-export type Session = { id: number; name: string; api_id: number; api_hash: string; session_string?: string; phone_number?: string; bot_token?: string; state: string; last_error?: string; last_connected_at?: string; created_at: string; updated_at?: string }
-export type ApiKey = { id: number; name: string; prefix: string; user_id: number; created_at?: string; expires_at?: string; last_used_at?: string; is_active: boolean }
-export const getDialogs = (limit = 50) => api<{ items: Dialog[]; total: number; limit: number; offset: number }>(`/dialogs?limit=${limit}`)
-export const getMessages = (dialogId: number, limit = 100) => api<{ items: Message[]; total: number; limit: number; offset: number }>(`/dialogs/${dialogId}/messages?limit=${limit}`)
-export const sendMessage = (peer: string, message: string) => api<{ message_id: number; peer: string }>('/messages/send', { method: 'POST', body: JSON.stringify({ peer, message }) })
-export const forwardMessages = (from_peer: string, to_peer: string, message_ids: number[]) => api<{ message_ids: number[]; from_peer: string; to_peer: string }>('/messages/forward', { method: 'POST', body: JSON.stringify({ from_peer, to_peer, message_ids }) })
-export const getWebhooks = () => api<{ items: Webhook[] }>('/webhooks')
-export const createWebhook = (payload: Omit<Webhook, 'id' | 'created_at' | 'updated_at'>) => api<Webhook>('/webhooks', { method: 'POST', body: JSON.stringify(payload) })
-export const updateWebhook = (id: number, payload: Partial<Omit<Webhook, 'id' | 'created_at' | 'updated_at'>>) => api<Webhook>(`/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
-export const deleteWebhook = (id: number) => api<void>(`/webhooks/${id}`, { method: 'DELETE' })
-export const getSessions = () => api<{ items: Session[] }>('/sessions')
-export const createSession = (payload: { name: string; api_id: number; api_hash: string; session_string?: string; phone_number?: string; bot_token?: string }) => api<Session>('/sessions', { method: 'POST', body: JSON.stringify(payload) })
-export const sessionAction = (id: number, action: 'connect' | 'disconnect' | 'reconnect') => api<Session>(`/sessions/${id}/${action}`, { method: 'POST' })
-export const deleteSession = (id: number) => api<void>(`/sessions/${id}`, { method: 'DELETE' })
-export const getApiKeys = () => api<ApiKey[]>('/apikeys')
-export const createApiKey = (name: string, expires_in_days?: number) => api<ApiKey & { key: string }>('/apikeys', { method: 'POST', body: JSON.stringify({ name, expires_in_days }) })
-export const deleteApiKey = (id: number) => api<{ status: string; id: string }>(`/apikeys/${id}`, { method: 'DELETE' })
+export type Session = { id: number; name: string; api_id: number; api_hash: string; session_string?: string; phone_number?: string; bot_token?: string; state:string; last_error?: string; last_connected_at?: string; created_at:string; updated_at?: string }
+export type ApiKey = { id:number; name:string; prefix:string; user_id:number; created_at?:string; expires_at?:string; last_used_at?:string; is_active:boolean }
+export const getDialogs=(limit=50)=>api<{items:Dialog[];total:number;limit:number;offset:number}>(`/dialogs?limit=${limit}`)
+export const getMessages=(dialogId:number,limit=100)=>api<{items:Message[];total:number;limit:number;offset:number}>(`/dialogs/${dialogId}/messages?limit=${limit}`)
+export const sendMessage=(peer:string,message:string)=>api<{message_id:number;peer:string}>('/messages/send',{method:'POST',body:JSON.stringify({peer,message})})
+export const forwardMessages=(from_peer:string,to_peer:string,message_ids:number[])=>api<{message_ids:number[];from_peer:string;to_peer:string}>('/messages/forward',{method:'POST',body:JSON.stringify({from_peer,to_peer,message_ids})})
+export const getWebhooks=()=>api<{items:Webhook[]}>('/webhooks')
+export const createWebhook=(payload:Omit<Webhook,'id'|'created_at'|'updated_at'>)=>api<Webhook>('/webhooks',{method:'POST',body:JSON.stringify(payload)})
+export const updateWebhook=(id:number,payload:Partial<Omit<Webhook,'id'|'created_at'|'updated_at'>>)=>api<Webhook>(`/webhooks/${id}`,{method:'PUT',body:JSON.stringify(payload)})
+export const deleteWebhook=(id:number)=>api<void>(`/webhooks/${id}`,{method:'DELETE'})
+export const getSessions=()=>api<{items:Session[]}>('/sessions')
+export const createSession=(payload:{name:string;api_id:number;api_hash:string;session_string?:string;phone_number?:string;bot_token?:string})=>api<Session>('/sessions',{method:'POST',body:JSON.stringify(payload)})
+export const sessionAction=(id:number,action:'connect'|'disconnect'|'reconnect')=>api<Session>(`/sessions/${id}/${action}`,{method:'POST'})
+export const deleteSession=(id:number)=>api<void>(`/sessions/${id}`,{method:'DELETE'})
+export const getApiKeys=()=>api<ApiKey[]>('/apikeys')
+export const createApiKey=(name:string,expires_in_days?:number)=>api<ApiKey&{key:string}>('/apikeys',{method:'POST',body:JSON.stringify({name,expires_in_days})})
+export const deleteApiKey=(id:number)=>api<{status:string;id:string}>(`/apikeys/${id}`,{method:'DELETE'})
